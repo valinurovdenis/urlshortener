@@ -17,3 +17,7 @@ func (s RandBase64Generator) Generate() (string, error) {
 	}
 	return base64.URLEncoding.EncodeToString(buffer)[:s.Length], nil
 }
+
+func NewRandBase64Generator(length int) *RandBase64Generator {
+	return &RandBase64Generator{Length: length}
+}

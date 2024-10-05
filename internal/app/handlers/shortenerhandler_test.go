@@ -13,12 +13,33 @@ import (
 	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage/mocks"
 )
 
+func testRequest(t *testing.T, ts *httptest.Server, method,
+	path string, body io.Reader) (*http.Response, string) {
+
+	req, err := http.NewRequest(method, ts.URL+path, body)
+	require.NoError(t, err)
+
+	ts.Client().CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	return resp, string(respBody)
+}
+
 func TestShortenerHandler_redirect(t *testing.T) {
-	mockStorage := mocks.NewURLStorage(t)
 	existingURL := "http://existing.ru"
-	handler := ShortenerHandler{
-		Storage: mockStorage,
-		Host:    "http://localhost:8080/"}
+	mockStorage := mocks.NewURLStorage(t)
+	mockStorage.On("Get", "existing").Return(existingURL, nil).Once()
+	mockStorage.On("Get", "non-existing").Return("", errors.New("some error")).Once()
+	handler := NewShortenerHandler(mockStorage, "host/")
+	ts := httptest.NewServer(ShortenerRouter(*handler))
+	defer ts.Close()
 	testCases := []struct {
 		name             string
 		method           string
@@ -30,26 +51,15 @@ func TestShortenerHandler_redirect(t *testing.T) {
 			expectedCode: http.StatusTemporaryRedirect, expectedLocation: existingURL},
 		{name: "non-existing", method: http.MethodGet, shortURL: "/non-existing",
 			expectedCode: http.StatusBadRequest, expectedLocation: ""},
-		{name: "empty", method: http.MethodGet, shortURL: "/",
-			expectedCode: http.StatusBadRequest, expectedLocation: ""},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.method, func(t *testing.T) {
-			r := httptest.NewRequest(tc.method, tc.shortURL, nil)
-			w := httptest.NewRecorder()
+			resp, _ := testRequest(t, ts, tc.method, tc.shortURL, nil)
+			defer resp.Body.Close()
 
-			if tc.expectedLocation != "" {
-				mockStorage.On("Get", tc.shortURL[1:]).Return(existingURL, nil).Once()
-			} else {
-				mockStorage.On("Get", tc.shortURL[1:]).Return("", errors.New("some error")).Once()
-			}
-			handler.redirect(w, r)
-			res := w.Result()
-			defer res.Body.Close()
-
-			require.Equal(t, tc.expectedCode, res.StatusCode, "Код ответа не совпадает с ожидаемым")
-			assert.Equal(t, tc.expectedLocation, res.Header.Get("Location"), "Адрес редиректа не совпадает с ожидаемым")
+			require.Equal(t, tc.expectedCode, resp.StatusCode, "Код ответа не совпадает с ожидаемым")
+			assert.Equal(t, tc.expectedLocation, resp.Header.Get("Location"), "Адрес редиректа не совпадает с ожидаемым")
 		})
 	}
 }
@@ -58,9 +68,10 @@ func TestShortenerHandler_generate(t *testing.T) {
 	mockStorage := mocks.NewURLStorage(t)
 	mockStorage.On("Store", "http://existing1.ru").Return("existing1", nil).Twice()
 	mockStorage.On("Store", "https://existing2.ru").Return("existing2", nil).Once()
-	handler := ShortenerHandler{
-		Storage: mockStorage,
-		Host:    "http://localhost:8080/"}
+	shortURLHost := "host/"
+	handler := NewShortenerHandler(mockStorage, shortURLHost)
+	ts := httptest.NewServer(ShortenerRouter(*handler))
+	defer ts.Close()
 	testCases := []struct {
 		name             string
 		method           string
@@ -69,11 +80,11 @@ func TestShortenerHandler_generate(t *testing.T) {
 		expectedShortURL string
 	}{
 		{name: "http", method: http.MethodPost, URL: "http://existing1.ru",
-			expectedCode: http.StatusCreated, expectedShortURL: handler.Host + "existing1"},
+			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing1"},
 		{name: "empty scheme", method: http.MethodPost, URL: "existing1.ru",
-			expectedCode: http.StatusCreated, expectedShortURL: handler.Host + "existing1"},
+			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing1"},
 		{name: "https", method: http.MethodPost, URL: "https://existing2.ru",
-			expectedCode: http.StatusCreated, expectedShortURL: handler.Host + "existing2"},
+			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing2"},
 		{name: "fake url", method: http.MethodPost, URL: "{:3fake-url:3}",
 			expectedCode: http.StatusBadRequest, expectedShortURL: ""},
 		{name: "empty url", method: http.MethodPost, URL: "",
@@ -82,18 +93,12 @@ func TestShortenerHandler_generate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.method, func(t *testing.T) {
-			r := httptest.NewRequest(tc.method, "/", bytes.NewBuffer([]byte(tc.URL)))
-			w := httptest.NewRecorder()
+			resp, resShortURL := testRequest(t, ts, tc.method, "/", bytes.NewBuffer([]byte(tc.URL)))
+			defer resp.Body.Close()
 
-			handler.generate(w, r)
-			res := w.Result()
-			defer res.Body.Close()
-			resShortURL, err := io.ReadAll(res.Body)
-			require.NoError(t, err)
-
-			require.Equal(t, tc.expectedCode, res.StatusCode, "Код ответа не совпадает с ожидаемым")
+			require.Equal(t, tc.expectedCode, resp.StatusCode, "Код ответа не совпадает с ожидаемым")
 			if tc.expectedShortURL != "" {
-				assert.Equal(t, tc.expectedShortURL, string(resShortURL), "Короткая ссылка не совпадает с ожидаемой")
+				assert.Equal(t, tc.expectedShortURL, resShortURL, "Короткая ссылка не совпадает с ожидаемой")
 			}
 		})
 	}
@@ -101,33 +106,26 @@ func TestShortenerHandler_generate(t *testing.T) {
 
 func TestShortenerHandler_ServeHTTPBadRequest(t *testing.T) {
 	mockStorage := mocks.NewURLStorage(t)
-	handler := ShortenerHandler{
-		Storage: mockStorage,
-		Host:    "http://localhost:8080/"}
+	handler := NewShortenerHandler(mockStorage, "host/")
+	ts := httptest.NewServer(ShortenerRouter(*handler))
+	defer ts.Close()
 	testCases := []struct {
 		name         string
+		url          string
 		method       string
 		contentType  string
 		expectedCode int
 	}{
-		{name: "method delete", method: http.MethodDelete, contentType: "text/plain"},
-		{name: "method put", method: http.MethodPut, contentType: "text/plain"},
+		{name: "method delete", url: "/asdf", method: http.MethodDelete, contentType: "text/plain"},
+		{name: "method put", url: "/qwer", method: http.MethodPut, contentType: "text/plain"},
+		{name: "method put", url: "/", method: http.MethodGet, contentType: "text/plain"},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.method, func(t *testing.T) {
-			r := httptest.NewRequest(tc.method, "/", nil)
-			w := httptest.NewRecorder()
-
-			r.Header.Set("Content-Type", tc.contentType)
-			handler.ServeHTTP(w, r)
-			res := w.Result()
-			defer res.Body.Close()
-			resBody, err := io.ReadAll(res.Body)
-			require.NoError(t, err)
-
-			assert.Equal(t, http.StatusBadRequest, res.StatusCode, "Код ответа не совпадает с ожидаемым")
-			assert.Equal(t, "Not supported method\n", string(resBody), "Не совпадает текст ошибки")
+			resp, _ := testRequest(t, ts, tc.method, tc.url, nil)
+			defer resp.Body.Close()
+			assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode, "Код ответа не совпадает с ожидаемым")
 		})
 	}
 }

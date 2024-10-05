@@ -15,12 +15,10 @@ func main() {
 }
 
 func run() error {
-	mux := http.NewServeMux()
-	generator := shortcutgenerator.RandBase64Generator{Length: 8}
-	storage := urlstorage.MakeSimpleMapLockStorage(generator)
-	handler := handlers.ShortenerHandler{
-		Storage: storage,
-		Host:    "http://localhost:8080/"}
-	mux.Handle("/", &handler)
-	return http.ListenAndServe(`:8080`, mux)
+	shortLength := 8
+	host := "http://localhost:8080/"
+	generator := shortcutgenerator.NewRandBase64Generator(shortLength)
+	storage := urlstorage.NewSimpleMapLockStorage(generator)
+	handler := handlers.NewShortenerHandler(storage, host)
+	return http.ListenAndServe(":8080", handlers.ShortenerRouter(*handler))
 }

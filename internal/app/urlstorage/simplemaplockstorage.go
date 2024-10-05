@@ -44,7 +44,7 @@ func (s *SimpleMapLockStorage) Store(url string) (string, error) {
 	return shortURL, nil
 }
 
-func MakeSimpleMapLockStorage(generator shortcutgenerator.ShortCutGenerator) URLStorage {
+func NewSimpleMapLockStorage(generator shortcutgenerator.ShortCutGenerator) *SimpleMapLockStorage {
 	return &SimpleMapLockStorage{
 		Generator:    generator,
 		ShortURL2Url: make(map[string]string),
