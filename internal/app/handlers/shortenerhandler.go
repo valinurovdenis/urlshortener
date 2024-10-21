@@ -5,18 +5,17 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
-	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
-	"github.com/valinurovdenis/urlshortener/internal/app/utils"
+	"github.com/valinurovdenis/urlshortener/internal/app/service"
 )
 
 type ShortenerHandler struct {
-	Storage urlstorage.URLStorage
+	Service service.ShortenerService
 	Host    string
 }
 
 func (h *ShortenerHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 	shortURL := chi.URLParam(r, "url")
-	url, err := h.Storage.Get(shortURL)
+	url, err := h.Service.GetLongURL(shortURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -30,10 +29,7 @@ func (h *ShortenerHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	var err error
 	rawURL, err = io.ReadAll(r.Body)
 	if err == nil {
-		url, err = utils.SanitizeURL(string(rawURL))
-		if err == nil {
-			url, err = h.Storage.Store(url)
-		}
+		url, err = h.Service.GenerateShortURL(string(rawURL))
 	}
 
 	if err != nil {
@@ -45,8 +41,8 @@ func (h *ShortenerHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(h.Host + url))
 }
 
-func NewShortenerHandler(storage urlstorage.URLStorage, host string) *ShortenerHandler {
-	return &ShortenerHandler{Storage: storage, Host: host}
+func NewShortenerHandler(service service.ShortenerService, host string) *ShortenerHandler {
+	return &ShortenerHandler{Service: service, Host: host}
 }
 
 func ShortenerRouter(handler ShortenerHandler) chi.Router {

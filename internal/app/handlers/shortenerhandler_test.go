@@ -10,7 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage/mocks"
+	"github.com/valinurovdenis/urlshortener/internal/app/mocks"
+	"github.com/valinurovdenis/urlshortener/internal/app/service"
 )
 
 func testRequest(t *testing.T, ts *httptest.Server, method,
@@ -34,10 +35,12 @@ func testRequest(t *testing.T, ts *httptest.Server, method,
 
 func TestShortenerHandler_redirect(t *testing.T) {
 	existingURL := "http://existing.ru"
+	mockGenerator := mocks.NewShortCutGenerator(t)
 	mockStorage := mocks.NewURLStorage(t)
-	mockStorage.On("Get", "existing").Return(existingURL, nil).Once()
-	mockStorage.On("Get", "non-existing").Return("", errors.New("some error")).Once()
-	handler := NewShortenerHandler(mockStorage, "host/")
+	mockStorage.On("GetLongURL", "existing").Return(existingURL, nil).Once()
+	mockStorage.On("GetLongURL", "non-existing").Return("", errors.New("some error")).Once()
+	shortenerService := service.NewShortenerService(mockStorage, mockGenerator)
+	handler := NewShortenerHandler(*shortenerService, "host/")
 	ts := httptest.NewServer(ShortenerRouter(*handler))
 	defer ts.Close()
 	testCases := []struct {
@@ -54,7 +57,7 @@ func TestShortenerHandler_redirect(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.method, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			resp, _ := testRequest(t, ts, tc.method, tc.shortURL, nil)
 			defer resp.Body.Close()
 
@@ -65,11 +68,15 @@ func TestShortenerHandler_redirect(t *testing.T) {
 }
 
 func TestShortenerHandler_generate(t *testing.T) {
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	mockGenerator.On("Generate").Return("existing1", nil).Once()
 	mockStorage := mocks.NewURLStorage(t)
-	mockStorage.On("Store", "http://existing1.ru").Return("existing1", nil).Twice()
-	mockStorage.On("Store", "https://existing2.ru").Return("existing2", nil).Once()
+	mockStorage.On("GetShortURL", "http://existing1.ru").Return("existing1", nil).Twice()
+	mockStorage.On("GetShortURL", "https://existing1.ru").Return("", errors.New("no such shortUrl")).Once()
+	mockStorage.On("Store", "https://existing1.ru", "existing1").Return(nil).Once()
 	shortURLHost := "host/"
-	handler := NewShortenerHandler(mockStorage, shortURLHost)
+	shortenerService := service.NewShortenerService(mockStorage, mockGenerator)
+	handler := NewShortenerHandler(*shortenerService, shortURLHost)
 	ts := httptest.NewServer(ShortenerRouter(*handler))
 	defer ts.Close()
 	testCases := []struct {
@@ -83,8 +90,8 @@ func TestShortenerHandler_generate(t *testing.T) {
 			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing1"},
 		{name: "empty scheme", method: http.MethodPost, URL: "existing1.ru",
 			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing1"},
-		{name: "https", method: http.MethodPost, URL: "https://existing2.ru",
-			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing2"},
+		{name: "https", method: http.MethodPost, URL: "https://existing1.ru",
+			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing1"},
 		{name: "fake url", method: http.MethodPost, URL: "{:3fake-url:3}",
 			expectedCode: http.StatusBadRequest, expectedShortURL: ""},
 		{name: "empty url", method: http.MethodPost, URL: "",
@@ -92,7 +99,7 @@ func TestShortenerHandler_generate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.method, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			resp, resShortURL := testRequest(t, ts, tc.method, "/", bytes.NewBuffer([]byte(tc.URL)))
 			defer resp.Body.Close()
 
@@ -106,7 +113,9 @@ func TestShortenerHandler_generate(t *testing.T) {
 
 func TestShortenerHandler_ServeHTTPBadRequest(t *testing.T) {
 	mockStorage := mocks.NewURLStorage(t)
-	handler := NewShortenerHandler(mockStorage, "host/")
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	shortenerService := service.NewShortenerService(mockStorage, mockGenerator)
+	handler := NewShortenerHandler(*shortenerService, "host/")
 	ts := httptest.NewServer(ShortenerRouter(*handler))
 	defer ts.Close()
 	testCases := []struct {
@@ -122,7 +131,7 @@ func TestShortenerHandler_ServeHTTPBadRequest(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.method, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			resp, _ := testRequest(t, ts, tc.method, tc.url, nil)
 			defer resp.Body.Close()
 			assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode, "Код ответа не совпадает с ожидаемым")

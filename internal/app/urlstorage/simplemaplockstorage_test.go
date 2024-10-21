@@ -6,13 +6,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/valinurovdenis/urlshortener/internal/app/shortcutgenerator/mocks"
 )
 
-func TestSimpleMapLockStorage_Get(t *testing.T) {
-	mockGenerator := mocks.NewShortCutGenerator(t)
+func TestSimpleMapLockStorage_GetLongURL(t *testing.T) {
 	storage := SimpleMapLockStorage{
-		Generator:    mockGenerator,
 		ShortURL2Url: map[string]string{"a": "url_a"},
 		URL2ShortURL: map[string]string{"url_a": "a"}}
 	tests := []struct {
@@ -28,7 +25,35 @@ func TestSimpleMapLockStorage_Get(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.s.Get(tt.shortURL)
+			got, err := tt.s.GetLongURL(tt.shortURL)
+			if tt.wantErr != nil {
+				require.EqualError(t, err, tt.wantErr.Error())
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestSimpleMapLockStorage_GetShortURL(t *testing.T) {
+	storage := SimpleMapLockStorage{
+		ShortURL2Url: map[string]string{"a": "url_a"},
+		URL2ShortURL: map[string]string{"url_a": "a"}}
+	tests := []struct {
+		name    string
+		s       *SimpleMapLockStorage
+		longURL string
+		want    string
+		wantErr error
+	}{
+		{name: "get_a", s: &storage, longURL: "url_a", want: "a", wantErr: nil},
+		{name: "get_b", s: &storage, longURL: "url_b", want: "", wantErr: errors.New("no such longUrl")},
+		{name: "get_empty", s: &storage, longURL: "", want: "", wantErr: errors.New("no such longUrl")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.s.GetShortURL(tt.longURL)
 			if tt.wantErr != nil {
 				require.EqualError(t, err, tt.wantErr.Error())
 			} else {
@@ -40,38 +65,26 @@ func TestSimpleMapLockStorage_Get(t *testing.T) {
 }
 
 func TestSimpleMapLockStorage_Store(t *testing.T) {
-	mockGenerator := mocks.NewShortCutGenerator(t)
 	storage := SimpleMapLockStorage{
-		Generator:    mockGenerator,
 		ShortURL2Url: map[string]string{"a": "url_a"},
 		URL2ShortURL: map[string]string{"url_a": "a"}}
 	tests := []struct {
-		name           string
-		s              *SimpleMapLockStorage
-		URL            string
-		want           string
-		wantErr        error
-		shortGenerated bool
+		name          string
+		longURL       string
+		shortURL      string
+		expectedError error
 	}{
-		{name: "store_a", s: &storage, URL: "url_a", want: "a", wantErr: nil, shortGenerated: false},
-		{name: "store_b", s: &storage, URL: "url_b", want: "b", wantErr: nil, shortGenerated: true},
-		{name: "store_empty", s: &storage, URL: "", want: "", wantErr: errors.New("cannot save empty url"), shortGenerated: false},
+		{name: "store_a", longURL: "url_a", shortURL: "a", expectedError: nil},
+		{name: "store_b", longURL: "url_b", shortURL: "b", expectedError: nil},
+		{name: "store_empty", longURL: "", shortURL: "", expectedError: errors.New("cannot save empty url")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.shortGenerated {
-				mockGenerator.On("Generate").Return(tt.want, nil).Once()
-			}
-			got, err := tt.s.Store(tt.URL)
-			if tt.wantErr != nil {
-				require.EqualError(t, err, tt.wantErr.Error())
-			} else {
-				require.NoError(t, err)
-			}
-			assert.Equal(t, tt.want, got)
+			err := storage.Store(tt.longURL, tt.shortURL)
+			require.Equal(t, tt.expectedError, err)
 			if err == nil {
-				assert.Subset(t, tt.s.URL2ShortURL, map[string]string{tt.URL: tt.want})
-				assert.Subset(t, tt.s.ShortURL2Url, map[string]string{tt.want: tt.URL})
+				assert.Subset(t, storage.URL2ShortURL, map[string]string{tt.longURL: tt.shortURL})
+				assert.Subset(t, storage.ShortURL2Url, map[string]string{tt.shortURL: tt.longURL})
 			}
 		})
 	}
