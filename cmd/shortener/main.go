@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/valinurovdenis/urlshortener/internal/app/handlers"
+	"github.com/valinurovdenis/urlshortener/internal/app/logger"
 	"github.com/valinurovdenis/urlshortener/internal/app/service"
 	"github.com/valinurovdenis/urlshortener/internal/app/shortcutgenerator"
 	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
@@ -18,8 +19,12 @@ func main() {
 func run() error {
 	config := new(Config)
 	parseFlags(config)
-	config.LocalURL = updateFromEnv("SERVER_ADDRESS", config.LocalURL)
-	config.BaseURL = updateFromEnv("BASE_URL", config.BaseURL)
+	config.updateFromEnv()
+
+	if err := logger.Initialize(config.LogLevel); err != nil {
+		return err
+	}
+
 	generator := shortcutgenerator.NewRandBase64Generator(config.ShortLength)
 	storage := urlstorage.NewSimpleMapLockStorage()
 	service := service.NewShortenerService(storage, generator)

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
+	"github.com/valinurovdenis/urlshortener/internal/app/logger"
 	"github.com/valinurovdenis/urlshortener/internal/app/service"
 )
 
@@ -47,6 +48,7 @@ func NewShortenerHandler(service service.ShortenerService, host string) *Shorten
 
 func ShortenerRouter(handler ShortenerHandler) chi.Router {
 	r := chi.NewRouter()
+	r.Use(logger.RequestLogger)
 	r.Post("/", handler.Generate)
 	r.Get("/{url}", handler.Redirect)
 	return r
