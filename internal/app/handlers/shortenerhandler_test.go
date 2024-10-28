@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -106,6 +108,54 @@ func TestShortenerHandler_generate(t *testing.T) {
 			require.Equal(t, tc.expectedCode, resp.StatusCode, "Код ответа не совпадает с ожидаемым")
 			if tc.expectedShortURL != "" {
 				assert.Equal(t, tc.expectedShortURL, resShortURL, "Короткая ссылка не совпадает с ожидаемой")
+			}
+		})
+	}
+}
+
+func TestShortenerHandler_generateJSON(t *testing.T) {
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	mockGenerator.On("Generate").Return("existing1", nil).Once()
+	mockStorage := mocks.NewURLStorage(t)
+	mockStorage.On("GetShortURL", "http://existing1.ru").Return("existing1", nil).Twice()
+	mockStorage.On("GetShortURL", "https://existing1.ru").Return("", errors.New("no such shortUrl")).Once()
+	mockStorage.On("Store", "https://existing1.ru", "existing1").Return(nil).Once()
+	shortURLHost := "host/"
+	shortenerService := service.NewShortenerService(mockStorage, mockGenerator)
+	handler := NewShortenerHandler(*shortenerService, shortURLHost)
+	ts := httptest.NewServer(ShortenerRouter(*handler))
+	defer ts.Close()
+	testCases := []struct {
+		name             string
+		method           string
+		URL              string
+		expectedCode     int
+		expectedShortURL string
+	}{
+		{name: "http", method: http.MethodPost, URL: "http://existing1.ru",
+			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing1"},
+		{name: "empty scheme", method: http.MethodPost, URL: "existing1.ru",
+			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing1"},
+		{name: "https", method: http.MethodPost, URL: "https://existing1.ru",
+			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing1"},
+		{name: "fake url", method: http.MethodPost, URL: "{:3fake-url:3}",
+			expectedCode: http.StatusBadRequest, expectedShortURL: ""},
+		{name: "empty url", method: http.MethodPost, URL: "",
+			expectedCode: http.StatusBadRequest, expectedShortURL: ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var input bytes.Buffer
+			json.NewEncoder(&input).Encode(inputURL{tc.URL})
+			resp, resShortURL := testRequest(t, ts, tc.method, "/api/shorten", &input)
+			defer resp.Body.Close()
+
+			require.Equal(t, tc.expectedCode, resp.StatusCode, "Код ответа не совпадает с ожидаемым")
+			if tc.expectedShortURL != "" {
+				var getShortURL resultURL
+				json.NewDecoder(strings.NewReader(resShortURL)).Decode(&getShortURL)
+				assert.Equal(t, tc.expectedShortURL, getShortURL.URL, "Короткая ссылка не совпадает с ожидаемой")
 			}
 		})
 	}
