@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"io"
@@ -17,9 +18,12 @@ import (
 )
 
 func testRequest(t *testing.T, ts *httptest.Server, method,
-	path string, body io.Reader) (*http.Response, string) {
+	path string, body io.Reader, headers map[string]string) (*http.Response, string) {
 
 	req, err := http.NewRequest(method, ts.URL+path, body)
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
 	require.NoError(t, err)
 
 	ts.Client().CheckRedirect = func(req *http.Request, via []*http.Request) error {
@@ -60,7 +64,7 @@ func TestShortenerHandler_redirect(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			resp, _ := testRequest(t, ts, tc.method, tc.shortURL, nil)
+			resp, _ := testRequest(t, ts, tc.method, tc.shortURL, nil, nil)
 			defer resp.Body.Close()
 
 			require.Equal(t, tc.expectedCode, resp.StatusCode, "Код ответа не совпадает с ожидаемым")
@@ -102,7 +106,8 @@ func TestShortenerHandler_generate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			resp, resShortURL := testRequest(t, ts, tc.method, "/", bytes.NewBuffer([]byte(tc.URL)))
+			resp, resShortURL := testRequest(t, ts, tc.method, "/",
+				bytes.NewBuffer([]byte(tc.URL)), nil)
 			defer resp.Body.Close()
 
 			require.Equal(t, tc.expectedCode, resp.StatusCode, "Код ответа не совпадает с ожидаемым")
@@ -148,7 +153,7 @@ func TestShortenerHandler_generateJSON(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var input bytes.Buffer
 			json.NewEncoder(&input).Encode(inputURL{tc.URL})
-			resp, resShortURL := testRequest(t, ts, tc.method, "/api/shorten", &input)
+			resp, resShortURL := testRequest(t, ts, tc.method, "/api/shorten", &input, nil)
 			defer resp.Body.Close()
 
 			require.Equal(t, tc.expectedCode, resp.StatusCode, "Код ответа не совпадает с ожидаемым")
@@ -156,6 +161,47 @@ func TestShortenerHandler_generateJSON(t *testing.T) {
 				var getShortURL resultURL
 				json.NewDecoder(strings.NewReader(resShortURL)).Decode(&getShortURL)
 				assert.Equal(t, tc.expectedShortURL, getShortURL.URL, "Короткая ссылка не совпадает с ожидаемой")
+			}
+		})
+	}
+}
+
+func TestShortenerHandler_generateGzip(t *testing.T) {
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	mockStorage := mocks.NewURLStorage(t)
+	mockStorage.On("GetShortURL", "http://existing1.ru").Return("existing1", nil).Once()
+	shortURLHost := "host/"
+	shortenerService := service.NewShortenerService(mockStorage, mockGenerator)
+	handler := NewShortenerHandler(*shortenerService, shortURLHost)
+	ts := httptest.NewServer(ShortenerRouter(*handler))
+	defer ts.Close()
+	testCases := []struct {
+		name             string
+		method           string
+		URL              string
+		expectedCode     int
+		expectedShortURL string
+	}{
+		{name: "http", method: http.MethodPost, URL: "http://existing1.ru",
+			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing1"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var compressedInput bytes.Buffer
+			writer := gzip.NewWriter(&compressedInput)
+			writer.Write([]byte(tc.URL))
+			writer.Close()
+			resp, resCompressedURL := testRequest(t, ts, tc.method, "/", &compressedInput,
+				map[string]string{"Content-Encoding": "gzip", "Accept-Encoding": "gzip"})
+			defer resp.Body.Close()
+
+			require.Equal(t, tc.expectedCode, resp.StatusCode, "Код ответа не совпадает с ожидаемым")
+			require.Contains(t, "gzip", resp.Header.Get("Accept-Encoding"), "Ответ не содержит Accept-Encoding: gzip")
+			if tc.expectedShortURL != "" {
+				gz, _ := gzip.NewReader(strings.NewReader(resCompressedURL))
+				decompressedURL, _ := io.ReadAll(gz)
+				assert.Equal(t, tc.expectedShortURL, string(decompressedURL), "Короткая ссылка не совпадает с ожидаемой")
 			}
 		})
 	}
@@ -182,7 +228,7 @@ func TestShortenerHandler_ServeHTTPBadRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			resp, _ := testRequest(t, ts, tc.method, tc.url, nil)
+			resp, _ := testRequest(t, ts, tc.method, tc.url, nil, nil)
 			defer resp.Body.Close()
 			assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode, "Код ответа не совпадает с ожидаемым")
 		})
