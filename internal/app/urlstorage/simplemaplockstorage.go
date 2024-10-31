@@ -45,6 +45,25 @@ func (s *SimpleMapLockStorage) Store(longURL string, shortURL string) error {
 	return nil
 }
 
+func (s *SimpleMapLockStorage) StoreMany(long2ShortUrls map[string]string) error {
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
+	for longURL, shortURL := range long2ShortUrls {
+		if shortURL == "" {
+			continue
+		}
+		s.ShortURL2Url[shortURL] = longURL
+		s.URL2ShortURL[longURL] = shortURL
+	}
+	return nil
+}
+
+func (s *SimpleMapLockStorage) Clear() error {
+	s.ShortURL2Url = make(map[string]string)
+	s.URL2ShortURL = make(map[string]string)
+	return nil
+}
+
 func NewSimpleMapLockStorage() *SimpleMapLockStorage {
 	return &SimpleMapLockStorage{
 		ShortURL2Url: make(map[string]string),

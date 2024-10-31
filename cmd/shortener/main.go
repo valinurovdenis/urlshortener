@@ -27,7 +27,12 @@ func run() error {
 
 	generator := shortcutgenerator.NewRandBase64Generator(config.ShortLength)
 	storage := urlstorage.NewSimpleMapLockStorage()
-	service := service.NewShortenerService(storage, generator)
+	fileStorageWrapper, err := urlstorage.NewFileDumpWrapper(config.FileStorage, storage)
+	if err != nil {
+		return err
+	}
+	fileStorageWrapper.RestoreFromDump()
+	service := service.NewShortenerService(fileStorageWrapper, generator)
 	handler := handlers.NewShortenerHandler(*service, config.BaseURL+"/")
 	return http.ListenAndServe(config.LocalURL, handlers.ShortenerRouter(*handler))
 }
