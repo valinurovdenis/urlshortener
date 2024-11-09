@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 
 	"github.com/go-chi/chi"
+	"github.com/valinurovdenis/urlshortener/internal/app/gzip"
+	"github.com/valinurovdenis/urlshortener/internal/app/logger"
 	"github.com/valinurovdenis/urlshortener/internal/app/service"
 )
 
@@ -41,13 +44,42 @@ func (h *ShortenerHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(h.Host + url))
 }
 
+type inputURL struct {
+	URL string `json:"url"`
+}
+
+type resultURL struct {
+	URL string `json:"result"`
+}
+
+func (h *ShortenerHandler) GenerateJSON(w http.ResponseWriter, r *http.Request) {
+	var shortURL string
+	var longURL inputURL
+	err := json.NewDecoder(r.Body).Decode(&longURL)
+	if err == nil {
+		shortURL, err = h.Service.GenerateShortURL(longURL.URL)
+	}
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(resultURL{h.Host + shortURL})
+}
+
 func NewShortenerHandler(service service.ShortenerService, host string) *ShortenerHandler {
 	return &ShortenerHandler{Service: service, Host: host}
 }
 
 func ShortenerRouter(handler ShortenerHandler) chi.Router {
 	r := chi.NewRouter()
+	r.Use(logger.RequestLogger)
+	r.Use(gzip.GzipMiddleware)
 	r.Post("/", handler.Generate)
+	r.Post("/api/shorten", handler.GenerateJSON)
 	r.Get("/{url}", handler.Redirect)
 	return r
 }

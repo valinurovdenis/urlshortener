@@ -89,3 +89,27 @@ func TestSimpleMapLockStorage_Store(t *testing.T) {
 		})
 	}
 }
+
+func TestSimpleMapLockStorage_StoreMany(t *testing.T) {
+	storage := SimpleMapLockStorage{
+		ShortURL2Url: map[string]string{"a": "url_a"},
+		URL2ShortURL: map[string]string{"url_a": "a"}}
+	tests := []struct {
+		name          string
+		urlsToStore   map[string]string
+		expectedError error
+	}{
+		{name: "store_many", urlsToStore: map[string]string{"url_a": "a", "url_b": "b"},
+			expectedError: nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := storage.StoreMany(tt.urlsToStore)
+			require.Equal(t, tt.expectedError, err)
+			assert.Equal(t, storage.URL2ShortURL,
+				map[string]string{"url_a": "a", "url_b": "b"})
+			assert.Subset(t, storage.ShortURL2Url,
+				map[string]string{"a": "url_a", "b": "url_b"})
+		})
+	}
+}
