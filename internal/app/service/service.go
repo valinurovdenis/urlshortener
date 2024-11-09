@@ -8,6 +8,10 @@ import (
 	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
 )
 
+type PingableDB interface {
+	Ping() error
+}
+
 func sanitizeURL(origURL string) (string, error) {
 	if origURL == "" {
 		return "", errors.New("empty string is not url")
@@ -52,6 +56,15 @@ func (s *ShortenerService) GetLongURL(shortURL string) (string, error) {
 		return "", errors.New("no such short url")
 	}
 	return longURL, nil
+}
+
+func (s *ShortenerService) Ping() error {
+	storage, isDB := s.URLStorage.(PingableDB)
+	if isDB {
+		return storage.Ping()
+	} else {
+		return nil
+	}
 }
 
 func NewShortenerService(storage urlstorage.URLStorage, generator shortcutgenerator.ShortCutGenerator) *ShortenerService {

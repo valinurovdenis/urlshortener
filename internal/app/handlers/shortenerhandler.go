@@ -70,6 +70,15 @@ func (h *ShortenerHandler) GenerateJSON(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(resultURL{h.Host + shortURL})
 }
 
+func (h *ShortenerHandler) Ping(w http.ResponseWriter, r *http.Request) {
+	err := h.Service.Ping()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
 func NewShortenerHandler(service service.ShortenerService, host string) *ShortenerHandler {
 	return &ShortenerHandler{Service: service, Host: host}
 }
@@ -81,5 +90,6 @@ func ShortenerRouter(handler ShortenerHandler) chi.Router {
 	r.Post("/", handler.Generate)
 	r.Post("/api/shorten", handler.GenerateJSON)
 	r.Get("/{url}", handler.Redirect)
+	r.Get("/ping", handler.Ping)
 	return r
 }
