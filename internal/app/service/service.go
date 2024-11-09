@@ -1,16 +1,13 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"net/url"
 
 	"github.com/valinurovdenis/urlshortener/internal/app/shortcutgenerator"
 	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
 )
-
-type PingableDB interface {
-	Ping() error
-}
 
 func sanitizeURL(origURL string) (string, error) {
 	if origURL == "" {
@@ -31,17 +28,17 @@ type ShortenerService struct {
 	Generator  shortcutgenerator.ShortCutGenerator
 }
 
-func (s *ShortenerService) GenerateShortURL(longURL string) (string, error) {
+func (s *ShortenerService) GenerateShortURLWithContext(context context.Context, longURL string) (string, error) {
 	longURL, err := sanitizeURL(longURL)
 	if err != nil {
 		return "", err
 	}
-	shortURL, err := s.URLStorage.GetShortURL(longURL)
+	shortURL, err := s.URLStorage.GetShortURLWithContext(context, longURL)
 	if err == nil {
 		return shortURL, nil
 	}
 	if shortURL, err = s.Generator.Generate(); err == nil {
-		err = s.URLStorage.Store(longURL, shortURL)
+		err = s.URLStorage.StoreWithContext(context, longURL, shortURL)
 	}
 	if err != nil {
 		return "", errors.New("cannot save new url")
@@ -50,8 +47,8 @@ func (s *ShortenerService) GenerateShortURL(longURL string) (string, error) {
 	return shortURL, nil
 }
 
-func (s *ShortenerService) GetLongURL(shortURL string) (string, error) {
-	longURL, err := s.URLStorage.GetLongURL(shortURL)
+func (s *ShortenerService) GetLongURLWithContext(context context.Context, shortURL string) (string, error) {
+	longURL, err := s.URLStorage.GetLongURLWithContext(context, shortURL)
 	if err != nil {
 		return "", errors.New("no such short url")
 	}
@@ -59,12 +56,7 @@ func (s *ShortenerService) GetLongURL(shortURL string) (string, error) {
 }
 
 func (s *ShortenerService) Ping() error {
-	storage, isDB := s.URLStorage.(PingableDB)
-	if isDB {
-		return storage.Ping()
-	} else {
-		return nil
-	}
+	return s.URLStorage.Ping()
 }
 
 func NewShortenerService(storage urlstorage.URLStorage, generator shortcutgenerator.ShortCutGenerator) *ShortenerService {

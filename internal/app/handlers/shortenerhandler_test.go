@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/valinurovdenis/urlshortener/internal/app/mocks"
 	"github.com/valinurovdenis/urlshortener/internal/app/service"
@@ -43,8 +44,8 @@ func TestShortenerHandler_redirect(t *testing.T) {
 	existingURL := "http://existing.ru"
 	mockGenerator := mocks.NewShortCutGenerator(t)
 	mockStorage := mocks.NewURLStorage(t)
-	mockStorage.On("GetLongURL", "existing").Return(existingURL, nil).Once()
-	mockStorage.On("GetLongURL", "non-existing").Return("", errors.New("some error")).Once()
+	mockStorage.On("GetLongURLWithContext", mock.Anything, "existing").Return(existingURL, nil).Once()
+	mockStorage.On("GetLongURLWithContext", mock.Anything, "non-existing").Return("", errors.New("some error")).Once()
 	shortenerService := service.NewShortenerService(mockStorage, mockGenerator)
 	handler := NewShortenerHandler(*shortenerService, "host/")
 	ts := httptest.NewServer(ShortenerRouter(*handler))
@@ -77,9 +78,9 @@ func TestShortenerHandler_generate(t *testing.T) {
 	mockGenerator := mocks.NewShortCutGenerator(t)
 	mockGenerator.On("Generate").Return("existing1", nil).Once()
 	mockStorage := mocks.NewURLStorage(t)
-	mockStorage.On("GetShortURL", "http://existing1.ru").Return("existing1", nil).Twice()
-	mockStorage.On("GetShortURL", "https://existing1.ru").Return("", errors.New("no such shortUrl")).Once()
-	mockStorage.On("Store", "https://existing1.ru", "existing1").Return(nil).Once()
+	mockStorage.On("GetShortURLWithContext", mock.Anything, "http://existing1.ru").Return("existing1", nil).Twice()
+	mockStorage.On("GetShortURLWithContext", mock.Anything, "https://existing1.ru").Return("", errors.New("no such shortUrl")).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "https://existing1.ru", "existing1").Return(nil).Once()
 	shortURLHost := "host/"
 	shortenerService := service.NewShortenerService(mockStorage, mockGenerator)
 	handler := NewShortenerHandler(*shortenerService, shortURLHost)
@@ -122,9 +123,9 @@ func TestShortenerHandler_generateJSON(t *testing.T) {
 	mockGenerator := mocks.NewShortCutGenerator(t)
 	mockGenerator.On("Generate").Return("existing1", nil).Once()
 	mockStorage := mocks.NewURLStorage(t)
-	mockStorage.On("GetShortURL", "http://existing1.ru").Return("existing1", nil).Twice()
-	mockStorage.On("GetShortURL", "https://existing1.ru").Return("", errors.New("no such shortUrl")).Once()
-	mockStorage.On("Store", "https://existing1.ru", "existing1").Return(nil).Once()
+	mockStorage.On("GetShortURLWithContext", mock.Anything, "http://existing1.ru").Return("existing1", nil).Twice()
+	mockStorage.On("GetShortURLWithContext", mock.Anything, "https://existing1.ru").Return("", errors.New("no such shortUrl")).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "https://existing1.ru", "existing1").Return(nil).Once()
 	shortURLHost := "host/"
 	shortenerService := service.NewShortenerService(mockStorage, mockGenerator)
 	handler := NewShortenerHandler(*shortenerService, shortURLHost)
@@ -169,7 +170,7 @@ func TestShortenerHandler_generateJSON(t *testing.T) {
 func TestShortenerHandler_generateGzip(t *testing.T) {
 	mockGenerator := mocks.NewShortCutGenerator(t)
 	mockStorage := mocks.NewURLStorage(t)
-	mockStorage.On("GetShortURL", "http://existing1.ru").Return("existing1", nil).Once()
+	mockStorage.On("GetShortURLWithContext", mock.Anything, "http://existing1.ru").Return("existing1", nil).Once()
 	shortURLHost := "host/"
 	shortenerService := service.NewShortenerService(mockStorage, mockGenerator)
 	handler := NewShortenerHandler(*shortenerService, shortURLHost)

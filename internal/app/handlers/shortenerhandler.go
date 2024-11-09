@@ -18,7 +18,7 @@ type ShortenerHandler struct {
 
 func (h *ShortenerHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 	shortURL := chi.URLParam(r, "url")
-	url, err := h.Service.GetLongURL(shortURL)
+	url, err := h.Service.GetLongURLWithContext(r.Context(), shortURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -32,7 +32,7 @@ func (h *ShortenerHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	var err error
 	rawURL, err = io.ReadAll(r.Body)
 	if err == nil {
-		url, err = h.Service.GenerateShortURL(string(rawURL))
+		url, err = h.Service.GenerateShortURLWithContext(r.Context(), string(rawURL))
 	}
 
 	if err != nil {
@@ -57,7 +57,7 @@ func (h *ShortenerHandler) GenerateJSON(w http.ResponseWriter, r *http.Request) 
 	var longURL inputURL
 	err := json.NewDecoder(r.Body).Decode(&longURL)
 	if err == nil {
-		shortURL, err = h.Service.GenerateShortURL(longURL.URL)
+		shortURL, err = h.Service.GenerateShortURLWithContext(r.Context(), longURL.URL)
 	}
 
 	if err != nil {

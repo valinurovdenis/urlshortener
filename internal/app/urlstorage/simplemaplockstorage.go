@@ -1,6 +1,7 @@
 package urlstorage
 
 import (
+	"context"
 	"errors"
 	"sync"
 )
@@ -11,7 +12,7 @@ type SimpleMapLockStorage struct {
 	Mutex        sync.Mutex
 }
 
-func (s *SimpleMapLockStorage) GetLongURL(shortURL string) (string, error) {
+func (s *SimpleMapLockStorage) GetLongURLWithContext(_ context.Context, shortURL string) (string, error) {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 	val, has := s.ShortURL2Url[shortURL]
@@ -22,7 +23,7 @@ func (s *SimpleMapLockStorage) GetLongURL(shortURL string) (string, error) {
 	}
 }
 
-func (s *SimpleMapLockStorage) GetShortURL(longURL string) (string, error) {
+func (s *SimpleMapLockStorage) GetShortURLWithContext(_ context.Context, longURL string) (string, error) {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 	val, has := s.URL2ShortURL[longURL]
@@ -33,7 +34,7 @@ func (s *SimpleMapLockStorage) GetShortURL(longURL string) (string, error) {
 	}
 }
 
-func (s *SimpleMapLockStorage) Store(longURL string, shortURL string) error {
+func (s *SimpleMapLockStorage) StoreWithContext(_ context.Context, longURL string, shortURL string) error {
 	if shortURL == "" {
 		return errors.New("cannot save empty url")
 	}
@@ -61,6 +62,10 @@ func (s *SimpleMapLockStorage) StoreMany(long2ShortUrls map[string]string) error
 func (s *SimpleMapLockStorage) Clear() error {
 	s.ShortURL2Url = make(map[string]string)
 	s.URL2ShortURL = make(map[string]string)
+	return nil
+}
+
+func (s *SimpleMapLockStorage) Ping() error {
 	return nil
 }
 

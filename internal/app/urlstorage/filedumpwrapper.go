@@ -2,6 +2,7 @@ package urlstorage
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -52,8 +53,8 @@ type FileDumpWrapper struct {
 	dumpMutex  sync.Mutex
 }
 
-func (f *FileDumpWrapper) Store(longURL string, shortURL string) error {
-	if err := f.URLStorage.Store(longURL, shortURL); err != nil {
+func (f *FileDumpWrapper) StoreWithContext(ctx context.Context, longURL string, shortURL string) error {
+	if err := f.URLStorage.StoreWithContext(ctx, longURL, shortURL); err != nil {
 		return err
 	}
 
