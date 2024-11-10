@@ -88,7 +88,7 @@ func (f *FileDumpWrapper) RestoreFromDump() error {
 	if err != io.EOF {
 		return err
 	}
-	f.URLStorage.StoreMany(long2ShortUrls)
+	f.URLStorage.StoreManyWithContext(context.Background(), long2ShortUrls)
 	return nil
 }
 

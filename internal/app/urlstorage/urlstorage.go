@@ -10,7 +10,7 @@ type URLStorage interface {
 
 	StoreWithContext(context context.Context, longURL string, shortURL string) error
 
-	StoreMany(long2ShortUrls map[string]string) error
+	StoreManyWithContext(context context.Context, long2ShortUrls map[string]string) error
 
 	Clear() error
 

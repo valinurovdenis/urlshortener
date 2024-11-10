@@ -86,7 +86,7 @@ func TestFileDumpWrapper_testDump(t *testing.T) {
 	checkEqualDumps(2)
 
 	mockStorage.On("Clear").Return(nil).Once()
-	mockStorage.On("StoreMany", map[string]string{
+	mockStorage.On("StoreManyWithContext", mock.Anything, map[string]string{
 		"http://youtube.ru/1": "1",
 		"http://youtube.ru/2": "2"}).Return(nil).Once()
 	mockStorage.On("StoreWithContext", mock.Anything, "http://youtube.ru/3", "3").Return(nil).Once()

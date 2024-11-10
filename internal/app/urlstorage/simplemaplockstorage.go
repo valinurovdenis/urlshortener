@@ -46,7 +46,7 @@ func (s *SimpleMapLockStorage) StoreWithContext(_ context.Context, longURL strin
 	return nil
 }
 
-func (s *SimpleMapLockStorage) StoreMany(long2ShortUrls map[string]string) error {
+func (s *SimpleMapLockStorage) StoreManyWithContext(_ context.Context, long2ShortUrls map[string]string) error {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 	for longURL, shortURL := range long2ShortUrls {

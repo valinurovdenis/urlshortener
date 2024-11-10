@@ -56,9 +56,13 @@ func (h *ShortenerHandler) GenerateJSON(w http.ResponseWriter, r *http.Request) 
 	var shortURL string
 	var longURL inputURL
 	err := json.NewDecoder(r.Body).Decode(&longURL)
-	if err == nil {
-		shortURL, err = h.Service.GenerateShortURLWithContext(r.Context(), longURL.URL)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
+
+	shortURL, err = h.Service.GenerateShortURLWithContext(r.Context(), longURL.URL)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -68,6 +72,41 @@ func (h *ShortenerHandler) GenerateJSON(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(resultURL{h.Host + shortURL})
+}
+
+type InputBatch struct {
+	URL string `json:"original_url"`
+	ID  string `json:"correlation_id"`
+}
+
+type ResultBatch struct {
+	URL string `json:"result_url"`
+	ID  string `json:"correlation_id"`
+}
+
+func (h *ShortenerHandler) GenerateBatch(w http.ResponseWriter, r *http.Request) {
+	var inputBatch []InputBatch
+	var resultBatch []ResultBatch
+	var longURLs []string
+	if err := json.NewDecoder(r.Body).Decode(&inputBatch); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	for _, v := range inputBatch {
+		longURLs = append(longURLs, v.URL)
+	}
+	shortURLs, err := h.Service.GenerateShortURLBatchWithContext(r.Context(), longURLs)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	for i, shortURL := range shortURLs {
+		resultBatch = append(resultBatch, ResultBatch{ID: inputBatch[i].ID, URL: h.Host + shortURL})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(resultBatch)
 }
 
 func (h *ShortenerHandler) Ping(w http.ResponseWriter, r *http.Request) {
@@ -89,6 +128,7 @@ func ShortenerRouter(handler ShortenerHandler) chi.Router {
 	r.Use(gzip.GzipMiddleware)
 	r.Post("/", handler.Generate)
 	r.Post("/api/shorten", handler.GenerateJSON)
+	r.Post("/api/shorten/batch", handler.GenerateBatch)
 	r.Get("/{url}", handler.Redirect)
 	r.Get("/ping", handler.Ping)
 	return r

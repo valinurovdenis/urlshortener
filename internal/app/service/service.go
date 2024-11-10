@@ -55,6 +55,30 @@ func (s *ShortenerService) GetLongURLWithContext(context context.Context, shortU
 	return longURL, nil
 }
 
+func (s *ShortenerService) GenerateShortURLBatchWithContext(context context.Context, longURLs []string) ([]string, error) {
+	var shortURLs []string
+	urls2Store := make(map[string]string)
+	for _, longURL := range longURLs {
+		longURL, err := sanitizeURL(longURL)
+		if err != nil {
+			return []string{}, err
+		}
+		shortURL, err := s.URLStorage.GetShortURLWithContext(context, longURL)
+		if err == nil {
+			shortURLs = append(shortURLs, shortURL)
+			continue
+		}
+		if shortURL, err = s.Generator.Generate(); err == nil {
+			urls2Store[longURL] = shortURL
+			shortURLs = append(shortURLs, shortURL)
+		}
+	}
+	if err := s.URLStorage.StoreManyWithContext(context, urls2Store); err != nil {
+		return []string{}, err
+	}
+	return shortURLs, nil
+}
+
 func (s *ShortenerService) Ping() error {
 	return s.URLStorage.Ping()
 }

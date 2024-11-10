@@ -105,17 +105,17 @@ func (_m *URLStorage) Ping() error {
 	return r0
 }
 
-// StoreMany provides a mock function with given fields: long2ShortUrls
-func (_m *URLStorage) StoreMany(long2ShortUrls map[string]string) error {
-	ret := _m.Called(long2ShortUrls)
+// StoreManyWithContext provides a mock function with given fields: _a0, long2ShortUrls
+func (_m *URLStorage) StoreManyWithContext(_a0 context.Context, long2ShortUrls map[string]string) error {
+	ret := _m.Called(_a0, long2ShortUrls)
 
 	if len(ret) == 0 {
-		panic("no return value specified for StoreMany")
+		panic("no return value specified for StoreManyWithContext")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(map[string]string) error); ok {
-		r0 = rf(long2ShortUrls)
+	if rf, ok := ret.Get(0).(func(context.Context, map[string]string) error); ok {
+		r0 = rf(_a0, long2ShortUrls)
 	} else {
 		r0 = ret.Error(0)
 	}

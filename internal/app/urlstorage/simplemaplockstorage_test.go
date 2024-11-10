@@ -105,7 +105,7 @@ func TestSimpleMapLockStorage_StoreMany(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := storage.StoreMany(tt.urlsToStore)
+			err := storage.StoreManyWithContext(context.Background(), tt.urlsToStore)
 			require.Equal(t, tt.expectedError, err)
 			assert.Equal(t, storage.URL2ShortURL,
 				map[string]string{"url_a": "a", "url_b": "b"})
