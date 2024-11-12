@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/valinurovdenis/urlshortener/internal/app/mocks"
+	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
 )
 
 func TestSanitizeURL(t *testing.T) {
@@ -38,11 +39,11 @@ func TestSanitizeURL(t *testing.T) {
 
 func TestShortenerService_GenerateShortURL(t *testing.T) {
 	mockGenerator := mocks.NewShortCutGenerator(t)
-	mockGenerator.On("Generate").Return("non-existing", nil).Once()
+	mockGenerator.On("Generate").Return("non-existing", nil).Twice()
 	mockStorage := mocks.NewURLStorage(t)
-	mockStorage.On("GetShortURLWithContext", mock.Anything, "http://non-existing.ru").Return("", errors.New("some error")).Once()
 	mockStorage.On("GetShortURLWithContext", mock.Anything, "http://existing.ru").Return("existing", nil).Once()
 	mockStorage.On("StoreWithContext", mock.Anything, "http://non-existing.ru", "non-existing").Return(nil).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "http://existing.ru", "non-existing").Return(urlstorage.ErrConflictURL).Once()
 	service := NewShortenerService(mockStorage, mockGenerator)
 	testCases := []struct {
 		name          string
@@ -50,7 +51,7 @@ func TestShortenerService_GenerateShortURL(t *testing.T) {
 		expectedShort string
 		expectedError error
 	}{
-		{name: "existing", longURL: "existing.ru", expectedShort: "existing", expectedError: nil},
+		{name: "existing", longURL: "existing.ru", expectedShort: "existing", expectedError: ErrConflictURL},
 		{name: "non-existing", longURL: "non-existing.ru", expectedShort: "non-existing", expectedError: nil},
 		{name: "empty", longURL: "", expectedShort: "", expectedError: errors.New("empty string is not url")},
 	}

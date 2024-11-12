@@ -73,7 +73,7 @@ func TestFileDumpWrapper_testDump(t *testing.T) {
 
 	checkEqualDumps := func(num int) {
 		consumer.Rewind()
-		for i := 1; i < 3; i++ {
+		for i := 1; i < num+1; i++ {
 			dump, err := consumer.ReadDump()
 			require.Equal(t, nil, err)
 			expectedDump := URLDump{
@@ -88,7 +88,7 @@ func TestFileDumpWrapper_testDump(t *testing.T) {
 	mockStorage.On("Clear").Return(nil).Once()
 	mockStorage.On("StoreManyWithContext", mock.Anything, map[string]string{
 		"http://youtube.ru/1": "1",
-		"http://youtube.ru/2": "2"}).Return(nil).Once()
+		"http://youtube.ru/2": "2"}).Return([]error{nil, nil}, nil).Once()
 	mockStorage.On("StoreWithContext", mock.Anything, "http://youtube.ru/3", "3").Return(nil).Once()
 	{
 		dumpWrapper, _ := NewFileDumpWrapper(testFilename, mockStorage)

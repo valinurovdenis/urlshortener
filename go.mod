@@ -6,6 +6,7 @@ toolchain go1.23.2
 
 require (
 	github.com/go-chi/chi v1.5.5
+	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0

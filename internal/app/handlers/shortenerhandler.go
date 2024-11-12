@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
@@ -35,12 +36,15 @@ func (h *ShortenerHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		url, err = h.Service.GenerateShortURLWithContext(r.Context(), string(rawURL))
 	}
 
-	if err != nil {
+	if err == nil {
+		w.WriteHeader(http.StatusCreated)
+	} else if errors.Is(err, service.ErrConflictURL) {
+		w.WriteHeader(http.StatusConflict)
+	} else {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(h.Host + url))
 }
 
@@ -64,13 +68,16 @@ func (h *ShortenerHandler) GenerateJSON(w http.ResponseWriter, r *http.Request) 
 
 	shortURL, err = h.Service.GenerateShortURLWithContext(r.Context(), longURL.URL)
 
-	if err != nil {
+	if err == nil {
+		w.WriteHeader(http.StatusCreated)
+	} else if errors.Is(err, service.ErrConflictURL) {
+		w.WriteHeader(http.StatusConflict)
+	} else {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(resultURL{h.Host + shortURL})
 }
 

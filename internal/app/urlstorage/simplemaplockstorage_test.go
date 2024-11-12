@@ -75,7 +75,7 @@ func TestSimpleMapLockStorage_Store(t *testing.T) {
 		shortURL      string
 		expectedError error
 	}{
-		{name: "store_a", longURL: "url_a", shortURL: "a", expectedError: nil},
+		{name: "store_a", longURL: "url_a", shortURL: "a", expectedError: ErrConflictURL},
 		{name: "store_b", longURL: "url_b", shortURL: "b", expectedError: nil},
 		{name: "store_empty", longURL: "", shortURL: "", expectedError: errors.New("cannot save empty url")},
 	}
@@ -105,8 +105,9 @@ func TestSimpleMapLockStorage_StoreMany(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := storage.StoreManyWithContext(context.Background(), tt.urlsToStore)
+			errs, err := storage.StoreManyWithContext(context.Background(), tt.urlsToStore)
 			require.Equal(t, tt.expectedError, err)
+			assert.Equal(t, errs, []error{ErrConflictURL, nil})
 			assert.Equal(t, storage.URL2ShortURL,
 				map[string]string{"url_a": "a", "url_b": "b"})
 			assert.Subset(t, storage.ShortURL2Url,

@@ -28,18 +28,25 @@ type ShortenerService struct {
 	Generator  shortcutgenerator.ShortCutGenerator
 }
 
+var ErrConflictURL = errors.New("conflict long url")
+
 func (s *ShortenerService) GenerateShortURLWithContext(context context.Context, longURL string) (string, error) {
 	longURL, err := sanitizeURL(longURL)
 	if err != nil {
 		return "", err
 	}
-	shortURL, err := s.URLStorage.GetShortURLWithContext(context, longURL)
-	if err == nil {
-		return shortURL, nil
+	shortURL, err := s.Generator.Generate()
+	if err != nil {
+		return "", errors.New("cannot generate new url")
 	}
-	if shortURL, err = s.Generator.Generate(); err == nil {
-		err = s.URLStorage.StoreWithContext(context, longURL, shortURL)
+	err = s.URLStorage.StoreWithContext(context, longURL, shortURL)
+	if errors.Is(err, urlstorage.ErrConflictURL) {
+		shortURL, err := s.URLStorage.GetShortURLWithContext(context, longURL)
+		if err == nil {
+			return shortURL, ErrConflictURL
+		}
 	}
+
 	if err != nil {
 		return "", errors.New("cannot save new url")
 	}
@@ -63,18 +70,25 @@ func (s *ShortenerService) GenerateShortURLBatchWithContext(context context.Cont
 		if err != nil {
 			return []string{}, err
 		}
-		shortURL, err := s.URLStorage.GetShortURLWithContext(context, longURL)
-		if err == nil {
-			shortURLs = append(shortURLs, shortURL)
-			continue
-		}
-		if shortURL, err = s.Generator.Generate(); err == nil {
+
+		if shortURL, err := s.Generator.Generate(); err == nil {
 			urls2Store[longURL] = shortURL
 			shortURLs = append(shortURLs, shortURL)
 		}
 	}
-	if err := s.URLStorage.StoreManyWithContext(context, urls2Store); err != nil {
+	errs, err := s.URLStorage.StoreManyWithContext(context, urls2Store)
+	if err != nil {
 		return []string{}, err
+	}
+	for i, longURL := range longURLs {
+		if errs[i] != nil {
+			shortURL, err := s.URLStorage.GetShortURLWithContext(context, longURL)
+			if errors.Is(err, urlstorage.ErrConflictURL) {
+				shortURLs[i] = shortURL
+			} else {
+				shortURLs[i] = "error when saving"
+			}
+		}
 	}
 	return shortURLs, nil
 }

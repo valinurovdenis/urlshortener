@@ -6,6 +6,9 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type DatabaseStorage struct {
@@ -20,6 +23,7 @@ func (s *DatabaseStorage) Init() error {
 	}
 	defer tx.Rollback()
 	tx.Exec(`CREATE TABLE shortener("short_url" TEXT,"long_url" TEXT)`)
+	tx.Exec(`CREATE UNIQUE INDEX long_url_index ON shortener USING btree(long_url)`)
 	return tx.Commit()
 }
 
@@ -54,32 +58,37 @@ func (s *DatabaseStorage) StoreWithContext(ctx context.Context, longURL string, 
 	defer s.Mutex.Unlock()
 	_, err := s.DB.ExecContext(ctx,
 		"INSERT into shortener (short_url, long_url) VALUES($1, $2)", shortURL, longURL)
+	if e, _ := err.(*pgconn.PgError); e.Code == pgerrcode.UniqueViolation {
+		err = ErrConflictURL
+	}
 	return err
 }
 
-func (s *DatabaseStorage) StoreManyWithContext(ctx context.Context, long2ShortUrls map[string]string) error {
+func (s *DatabaseStorage) StoreManyWithContext(ctx context.Context, long2ShortUrls map[string]string) ([]error, error) {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
+	var errs []error
 	tx, err := s.DB.Begin()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback()
 
 	stmt, err := tx.PrepareContext(ctx,
 		"INSERT INTO shortener (short_url, long_url) VALUES($1, $2)")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer stmt.Close()
 
 	for longURL, shortURL := range long2ShortUrls {
 		_, err := stmt.ExecContext(ctx, shortURL, longURL)
-		if err != nil {
-			return err
-		}
+		errs = append(errs, err)
 	}
-	return tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return errs, nil
 }
 
 func (s *DatabaseStorage) Clear() error {
