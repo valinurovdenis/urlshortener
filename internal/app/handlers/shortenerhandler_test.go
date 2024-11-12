@@ -94,9 +94,9 @@ func TestShortenerHandler_generate(t *testing.T) {
 		expectedShortURL string
 	}{
 		{name: "http", method: http.MethodPost, URL: "http://existing1.ru",
-			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing1"},
+			expectedCode: http.StatusConflict, expectedShortURL: shortURLHost + "existing1"},
 		{name: "empty scheme", method: http.MethodPost, URL: "existing1.ru",
-			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing1"},
+			expectedCode: http.StatusConflict, expectedShortURL: shortURLHost + "existing1"},
 		{name: "https", method: http.MethodPost, URL: "https://existing1.ru",
 			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing1"},
 		{name: "fake url", method: http.MethodPost, URL: "{:3fake-url:3}",
@@ -139,9 +139,9 @@ func TestShortenerHandler_generateJSON(t *testing.T) {
 		expectedShortURL string
 	}{
 		{name: "http", method: http.MethodPost, URL: "http://existing1.ru",
-			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing1"},
+			expectedCode: http.StatusConflict, expectedShortURL: shortURLHost + "existing1"},
 		{name: "empty scheme", method: http.MethodPost, URL: "existing1.ru",
-			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing1"},
+			expectedCode: http.StatusConflict, expectedShortURL: shortURLHost + "existing1"},
 		{name: "https", method: http.MethodPost, URL: "https://existing1.ru",
 			expectedCode: http.StatusCreated, expectedShortURL: shortURLHost + "existing1"},
 		{name: "fake url", method: http.MethodPost, URL: "{:3fake-url:3}",

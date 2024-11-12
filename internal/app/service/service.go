@@ -28,6 +28,8 @@ type ShortenerService struct {
 	Generator  shortcutgenerator.ShortCutGenerator
 }
 
+var ErrConflictURL = errors.New("conflict long url")
+
 func (s *ShortenerService) GenerateShortURLWithContext(context context.Context, longURL string) (string, error) {
 	longURL, err := sanitizeURL(longURL)
 	if err != nil {
@@ -35,7 +37,7 @@ func (s *ShortenerService) GenerateShortURLWithContext(context context.Context, 
 	}
 	shortURL, err := s.URLStorage.GetShortURLWithContext(context, longURL)
 	if err == nil {
-		return shortURL, nil
+		return shortURL, ErrConflictURL
 	}
 	if shortURL, err = s.Generator.Generate(); err == nil {
 		err = s.URLStorage.StoreWithContext(context, longURL, shortURL)

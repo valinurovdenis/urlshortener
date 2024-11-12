@@ -20,6 +20,7 @@ func (s *DatabaseStorage) Init() error {
 	}
 	defer tx.Rollback()
 	tx.Exec(`CREATE TABLE shortener("short_url" TEXT,"long_url" TEXT)`)
+	tx.Exec(`CREATE INDEX long_url_index ON shortener USING btree(long_url)`)
 	return tx.Commit()
 }
 
