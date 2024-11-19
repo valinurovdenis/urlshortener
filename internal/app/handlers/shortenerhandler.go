@@ -109,7 +109,9 @@ func (h *ShortenerHandler) GenerateBatch(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	for i, shortURL := range shortURLs {
-		resultBatch = append(resultBatch, ResultBatch{ID: inputBatch[i].ID, URL: h.Host + shortURL})
+		if shortURL != "" {
+			resultBatch = append(resultBatch, ResultBatch{ID: inputBatch[i].ID, URL: h.Host + shortURL})
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

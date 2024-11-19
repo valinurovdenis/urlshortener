@@ -90,7 +90,7 @@ func (s *ShortenerService) GenerateShortURLBatchWithContext(context context.Cont
 			if err == nil {
 				shortURLs[i] = shortURL
 			} else {
-				shortURLs[i] = "error when saving"
+				shortURLs[i] = ""
 			}
 		}
 	}
