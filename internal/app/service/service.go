@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 
 	"github.com/valinurovdenis/urlshortener/internal/app/shortcutgenerator"
@@ -35,15 +36,21 @@ func (s *ShortenerService) GenerateShortURLWithContext(context context.Context, 
 	if err != nil {
 		return "", err
 	}
-	shortURL, err := s.URLStorage.GetShortURLWithContext(context, longURL)
-	if err == nil {
-		return shortURL, ErrConflictURL
-	}
-	if shortURL, err = s.Generator.Generate(); err == nil {
-		err = s.URLStorage.StoreWithContext(context, longURL, shortURL)
-	}
+
+	shortURL, err := s.Generator.Generate()
 	if err != nil {
-		return "", errors.New("cannot save new url")
+		return "", fmt.Errorf("cannot generate new url: %w", err)
+	}
+	err = s.URLStorage.StoreWithContext(context, longURL, shortURL)
+	if errors.Is(err, urlstorage.ErrConflictURL) {
+		shortURL, err := s.URLStorage.GetShortURLWithContext(context, longURL)
+		if err == nil {
+			return shortURL, ErrConflictURL
+		}
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("cannot save new url: %w", err)
 	}
 
 	return shortURL, nil
@@ -52,7 +59,7 @@ func (s *ShortenerService) GenerateShortURLWithContext(context context.Context, 
 func (s *ShortenerService) GetLongURLWithContext(context context.Context, shortURL string) (string, error) {
 	longURL, err := s.URLStorage.GetLongURLWithContext(context, shortURL)
 	if err != nil {
-		return "", errors.New("no such short url")
+		return "", fmt.Errorf("no such short url: %w", err)
 	}
 	return longURL, nil
 }
@@ -65,18 +72,27 @@ func (s *ShortenerService) GenerateShortURLBatchWithContext(context context.Cont
 		if err != nil {
 			return []string{}, err
 		}
-		shortURL, err := s.URLStorage.GetShortURLWithContext(context, longURL)
-		if err == nil {
-			shortURLs = append(shortURLs, shortURL)
-			continue
+
+		shortURL, err := s.Generator.Generate()
+		if err != nil {
+			return nil, errors.New("cannot generate new short url")
 		}
-		if shortURL, err = s.Generator.Generate(); err == nil {
-			urls2Store[longURL] = shortURL
-			shortURLs = append(shortURLs, shortURL)
-		}
+		urls2Store[longURL] = shortURL
+		shortURLs = append(shortURLs, shortURL)
 	}
-	if err := s.URLStorage.StoreManyWithContext(context, urls2Store); err != nil {
+	errs, err := s.URLStorage.StoreManyWithContext(context, urls2Store)
+	if err != nil {
 		return []string{}, err
+	}
+	for i, longURL := range longURLs {
+		if errs[i] != nil {
+			shortURL, err := s.URLStorage.GetShortURLWithContext(context, longURL)
+			if err == nil {
+				shortURLs[i] = shortURL
+			} else {
+				shortURLs[i] = "error when saving"
+			}
+		}
 	}
 	return shortURLs, nil
 }

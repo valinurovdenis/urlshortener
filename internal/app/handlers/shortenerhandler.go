@@ -68,6 +68,7 @@ func (h *ShortenerHandler) GenerateJSON(w http.ResponseWriter, r *http.Request) 
 
 	shortURL, err = h.Service.GenerateShortURLWithContext(r.Context(), longURL.URL)
 
+	w.Header().Set("Content-Type", "application/json")
 	if err == nil {
 		w.WriteHeader(http.StatusCreated)
 	} else if errors.Is(err, service.ErrConflictURL) {
@@ -77,7 +78,6 @@ func (h *ShortenerHandler) GenerateJSON(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resultURL{h.Host + shortURL})
 }
 
@@ -87,7 +87,7 @@ type InputBatch struct {
 }
 
 type ResultBatch struct {
-	URL string `json:"result_url"`
+	URL string `json:"short_url"`
 	ID  string `json:"correlation_id"`
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/valinurovdenis/urlshortener/internal/app/mocks"
 	"github.com/valinurovdenis/urlshortener/internal/app/service"
+	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
 )
 
 func testRequest(t *testing.T, ts *httptest.Server, method,
@@ -74,12 +75,12 @@ func TestShortenerHandler_redirect(t *testing.T) {
 	}
 }
 
-func TestShortenerHandler_generate(t *testing.T) {
+func TestShortenerHandler_generateSimple(t *testing.T) {
 	mockGenerator := mocks.NewShortCutGenerator(t)
-	mockGenerator.On("Generate").Return("existing1", nil).Once()
+	mockGenerator.On("Generate").Return("existing1", nil).Times(3)
 	mockStorage := mocks.NewURLStorage(t)
 	mockStorage.On("GetShortURLWithContext", mock.Anything, "http://existing1.ru").Return("existing1", nil).Twice()
-	mockStorage.On("GetShortURLWithContext", mock.Anything, "https://existing1.ru").Return("", errors.New("no such shortUrl")).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "http://existing1.ru", "existing1").Return(urlstorage.ErrConflictURL).Twice()
 	mockStorage.On("StoreWithContext", mock.Anything, "https://existing1.ru", "existing1").Return(nil).Once()
 	shortURLHost := "host/"
 	shortenerService := service.NewShortenerService(mockStorage, mockGenerator)
@@ -112,7 +113,7 @@ func TestShortenerHandler_generate(t *testing.T) {
 			defer resp.Body.Close()
 
 			require.Equal(t, tc.expectedCode, resp.StatusCode, "Код ответа не совпадает с ожидаемым")
-			if tc.expectedShortURL != "" {
+			if tc.expectedCode == http.StatusCreated {
 				assert.Equal(t, tc.expectedShortURL, resShortURL, "Короткая ссылка не совпадает с ожидаемой")
 			}
 		})
@@ -121,10 +122,10 @@ func TestShortenerHandler_generate(t *testing.T) {
 
 func TestShortenerHandler_generateJSON(t *testing.T) {
 	mockGenerator := mocks.NewShortCutGenerator(t)
-	mockGenerator.On("Generate").Return("existing1", nil).Once()
+	mockGenerator.On("Generate").Return("existing1", nil).Times(3)
 	mockStorage := mocks.NewURLStorage(t)
 	mockStorage.On("GetShortURLWithContext", mock.Anything, "http://existing1.ru").Return("existing1", nil).Twice()
-	mockStorage.On("GetShortURLWithContext", mock.Anything, "https://existing1.ru").Return("", errors.New("no such shortUrl")).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "http://existing1.ru", "existing1").Return(urlstorage.ErrConflictURL).Twice()
 	mockStorage.On("StoreWithContext", mock.Anything, "https://existing1.ru", "existing1").Return(nil).Once()
 	shortURLHost := "host/"
 	shortenerService := service.NewShortenerService(mockStorage, mockGenerator)
@@ -158,7 +159,7 @@ func TestShortenerHandler_generateJSON(t *testing.T) {
 			defer resp.Body.Close()
 
 			require.Equal(t, tc.expectedCode, resp.StatusCode, "Код ответа не совпадает с ожидаемым")
-			if tc.expectedShortURL != "" {
+			if tc.expectedCode == http.StatusCreated {
 				var getShortURL resultURL
 				json.NewDecoder(strings.NewReader(resShortURL)).Decode(&getShortURL)
 				assert.Equal(t, tc.expectedShortURL, getShortURL.URL, "Короткая ссылка не совпадает с ожидаемой")
@@ -170,7 +171,8 @@ func TestShortenerHandler_generateJSON(t *testing.T) {
 func TestShortenerHandler_generateGzip(t *testing.T) {
 	mockGenerator := mocks.NewShortCutGenerator(t)
 	mockStorage := mocks.NewURLStorage(t)
-	mockStorage.On("GetShortURLWithContext", mock.Anything, "http://existing1.ru").Return("existing1", nil).Once()
+	mockGenerator.On("Generate").Return("existing1", nil).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "http://existing1.ru", "existing1").Return(nil).Once()
 	shortURLHost := "host/"
 	shortenerService := service.NewShortenerService(mockStorage, mockGenerator)
 	handler := NewShortenerHandler(*shortenerService, shortURLHost)

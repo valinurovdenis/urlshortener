@@ -1,6 +1,11 @@
 package urlstorage
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+var ErrConflictURL = errors.New("conflicting long url")
 
 //go:generate mockery --name URLStorage
 type URLStorage interface {
@@ -10,7 +15,7 @@ type URLStorage interface {
 
 	StoreWithContext(context context.Context, longURL string, shortURL string) error
 
-	StoreManyWithContext(context context.Context, long2ShortUrls map[string]string) error
+	StoreManyWithContext(context context.Context, long2ShortUrls map[string]string) ([]error, error)
 
 	Clear() error
 
