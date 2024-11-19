@@ -1,7 +1,9 @@
 package service
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/url"
 
 	"github.com/valinurovdenis/urlshortener/internal/app/shortcutgenerator"
@@ -27,31 +29,76 @@ type ShortenerService struct {
 	Generator  shortcutgenerator.ShortCutGenerator
 }
 
-func (s *ShortenerService) GenerateShortURL(longURL string) (string, error) {
+var ErrConflictURL = errors.New("conflict long url")
+
+func (s *ShortenerService) GenerateShortURLWithContext(context context.Context, longURL string) (string, error) {
 	longURL, err := sanitizeURL(longURL)
 	if err != nil {
 		return "", err
 	}
-	shortURL, err := s.URLStorage.GetShortURL(longURL)
-	if err == nil {
-		return shortURL, nil
-	}
-	if shortURL, err = s.Generator.Generate(); err == nil {
-		err = s.URLStorage.Store(longURL, shortURL)
-	}
+
+	shortURL, err := s.Generator.Generate()
 	if err != nil {
-		return "", errors.New("cannot save new url")
+		return "", fmt.Errorf("cannot generate new url: %w", err)
+	}
+	err = s.URLStorage.StoreWithContext(context, longURL, shortURL)
+	if errors.Is(err, urlstorage.ErrConflictURL) {
+		shortURL, err := s.URLStorage.GetShortURLWithContext(context, longURL)
+		if err == nil {
+			return shortURL, ErrConflictURL
+		}
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("cannot save new url: %w", err)
 	}
 
 	return shortURL, nil
 }
 
-func (s *ShortenerService) GetLongURL(shortURL string) (string, error) {
-	longURL, err := s.URLStorage.GetLongURL(shortURL)
+func (s *ShortenerService) GetLongURLWithContext(context context.Context, shortURL string) (string, error) {
+	longURL, err := s.URLStorage.GetLongURLWithContext(context, shortURL)
 	if err != nil {
-		return "", errors.New("no such short url")
+		return "", fmt.Errorf("no such short url: %w", err)
 	}
 	return longURL, nil
+}
+
+func (s *ShortenerService) GenerateShortURLBatchWithContext(context context.Context, longURLs []string) ([]string, error) {
+	var shortURLs []string
+	urls2Store := make(map[string]string)
+	for _, longURL := range longURLs {
+		longURL, err := sanitizeURL(longURL)
+		if err != nil {
+			return []string{}, err
+		}
+
+		shortURL, err := s.Generator.Generate()
+		if err != nil {
+			return nil, errors.New("cannot generate new short url")
+		}
+		urls2Store[longURL] = shortURL
+		shortURLs = append(shortURLs, shortURL)
+	}
+	errs, err := s.URLStorage.StoreManyWithContext(context, urls2Store)
+	if err != nil {
+		return []string{}, err
+	}
+	for i, longURL := range longURLs {
+		if errs[i] != nil {
+			shortURL, err := s.URLStorage.GetShortURLWithContext(context, longURL)
+			if err == nil {
+				shortURLs[i] = shortURL
+			} else {
+				shortURLs[i] = "error when saving"
+			}
+		}
+	}
+	return shortURLs, nil
+}
+
+func (s *ShortenerService) Ping() error {
+	return s.URLStorage.Ping()
 }
 
 func NewShortenerService(storage urlstorage.URLStorage, generator shortcutgenerator.ShortCutGenerator) *ShortenerService {

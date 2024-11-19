@@ -2,6 +2,7 @@ package urlstorage
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/valinurovdenis/urlshortener/internal/app/mocks"
 )
@@ -57,13 +59,13 @@ func TestFileDumpWrapper_testDump(t *testing.T) {
 	testFilename := "test_dump"
 	defer os.Remove(testFilename)
 	mockStorage := mocks.NewURLStorage(t)
-	mockStorage.On("Store", "http://youtube.ru/1", "1").Return(nil).Once()
-	mockStorage.On("Store", "http://youtube.ru/2", "2").Return(nil).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "http://youtube.ru/1", "1").Return(nil).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "http://youtube.ru/2", "2").Return(nil).Once()
 	{
 		dumpWrapper, _ := NewFileDumpWrapper(testFilename, mockStorage)
 
-		dumpWrapper.Store("http://youtube.ru/1", "1")
-		dumpWrapper.Store("http://youtube.ru/2", "2")
+		dumpWrapper.StoreWithContext(context.Background(), "http://youtube.ru/1", "1")
+		dumpWrapper.StoreWithContext(context.Background(), "http://youtube.ru/2", "2")
 	}
 
 	consumer, _ := NewConsumer(testFilename)
@@ -71,7 +73,7 @@ func TestFileDumpWrapper_testDump(t *testing.T) {
 
 	checkEqualDumps := func(num int) {
 		consumer.Rewind()
-		for i := 1; i < 3; i++ {
+		for i := 1; i < num+1; i++ {
 			dump, err := consumer.ReadDump()
 			require.Equal(t, nil, err)
 			expectedDump := URLDump{
@@ -84,15 +86,15 @@ func TestFileDumpWrapper_testDump(t *testing.T) {
 	checkEqualDumps(2)
 
 	mockStorage.On("Clear").Return(nil).Once()
-	mockStorage.On("StoreMany", map[string]string{
+	mockStorage.On("StoreManyWithContext", mock.Anything, map[string]string{
 		"http://youtube.ru/1": "1",
-		"http://youtube.ru/2": "2"}).Return(nil).Once()
-	mockStorage.On("Store", "http://youtube.ru/3", "3").Return(nil).Once()
+		"http://youtube.ru/2": "2"}).Return([]error{nil, nil}, nil).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "http://youtube.ru/3", "3").Return(nil).Once()
 	{
 		dumpWrapper, _ := NewFileDumpWrapper(testFilename, mockStorage)
 
 		dumpWrapper.RestoreFromDump()
-		dumpWrapper.Store("http://youtube.ru/3", "3")
+		dumpWrapper.StoreWithContext(context.Background(), "http://youtube.ru/3", "3")
 	}
 	checkEqualDumps(3)
 }

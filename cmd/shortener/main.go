@@ -1,7 +1,10 @@
 package main
 
 import (
+	"database/sql"
 	"net/http"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/valinurovdenis/urlshortener/internal/app/handlers"
 	"github.com/valinurovdenis/urlshortener/internal/app/logger"
@@ -25,14 +28,29 @@ func run() error {
 		return err
 	}
 
-	generator := shortcutgenerator.NewRandBase64Generator(config.ShortLength)
-	storage := urlstorage.NewSimpleMapLockStorage()
-	fileStorageWrapper, err := urlstorage.NewFileDumpWrapper(config.FileStorage, storage)
-	if err != nil {
-		return err
+	var storage urlstorage.URLStorage
+	if config.Database != "" {
+		db, err := sql.Open("pgx", config.Database)
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+		storage = urlstorage.NewDatabaseStorage(db)
+	} else {
+		storage = urlstorage.NewSimpleMapLockStorage()
+		if config.FileStorage != "" {
+			fileStorageWrapper, err := urlstorage.NewFileDumpWrapper(
+				config.FileStorage, storage)
+			if err != nil {
+				return err
+			}
+			fileStorageWrapper.RestoreFromDump()
+			storage = fileStorageWrapper
+		}
 	}
-	fileStorageWrapper.RestoreFromDump()
-	service := service.NewShortenerService(fileStorageWrapper, generator)
+
+	generator := shortcutgenerator.NewRandBase64Generator(config.ShortLength)
+	service := service.NewShortenerService(storage, generator)
 	handler := handlers.NewShortenerHandler(*service, config.BaseURL+"/")
 	return http.ListenAndServe(config.LocalURL, handlers.ShortenerRouter(*handler))
 }

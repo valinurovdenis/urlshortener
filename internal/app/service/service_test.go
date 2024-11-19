@@ -1,12 +1,15 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/valinurovdenis/urlshortener/internal/app/mocks"
+	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
 )
 
 func TestSanitizeURL(t *testing.T) {
@@ -36,11 +39,11 @@ func TestSanitizeURL(t *testing.T) {
 
 func TestShortenerService_GenerateShortURL(t *testing.T) {
 	mockGenerator := mocks.NewShortCutGenerator(t)
-	mockGenerator.On("Generate").Return("non-existing", nil).Once()
+	mockGenerator.On("Generate").Return("non-existing", nil).Twice()
 	mockStorage := mocks.NewURLStorage(t)
-	mockStorage.On("GetShortURL", "http://non-existing.ru").Return("", errors.New("some error")).Once()
-	mockStorage.On("GetShortURL", "http://existing.ru").Return("existing", nil).Once()
-	mockStorage.On("Store", "http://non-existing.ru", "non-existing").Return(nil).Once()
+	mockStorage.On("GetShortURLWithContext", mock.Anything, "http://existing.ru").Return("existing", nil).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "http://non-existing.ru", "non-existing").Return(nil).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "http://existing.ru", "non-existing").Return(urlstorage.ErrConflictURL).Once()
 	service := NewShortenerService(mockStorage, mockGenerator)
 	testCases := []struct {
 		name          string
@@ -48,14 +51,14 @@ func TestShortenerService_GenerateShortURL(t *testing.T) {
 		expectedShort string
 		expectedError error
 	}{
-		{name: "existing", longURL: "existing.ru", expectedShort: "existing", expectedError: nil},
+		{name: "existing", longURL: "existing.ru", expectedShort: "existing", expectedError: ErrConflictURL},
 		{name: "non-existing", longURL: "non-existing.ru", expectedShort: "non-existing", expectedError: nil},
 		{name: "empty", longURL: "", expectedShort: "", expectedError: errors.New("empty string is not url")},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			shortURL, err := service.GenerateShortURL(tc.longURL)
+			shortURL, err := service.GenerateShortURLWithContext(context.Background(), tc.longURL)
 			require.Equal(t, tc.expectedError, err, "Ошибка не совпадает")
 			require.Equal(t, tc.expectedShort, shortURL, "Короткий урл не совпадает")
 		})
@@ -65,8 +68,9 @@ func TestShortenerService_GenerateShortURL(t *testing.T) {
 func TestShortenerService_GetShortURL(t *testing.T) {
 	mockGenerator := mocks.NewShortCutGenerator(t)
 	mockStorage := mocks.NewURLStorage(t)
-	mockStorage.On("GetLongURL", "existing").Return("existing.ru", nil).Once()
-	mockStorage.On("GetLongURL", "non-existing").Return("", errors.New("no such short url")).Once()
+	storageErr := errors.New("not found")
+	mockStorage.On("GetLongURLWithContext", mock.Anything, "existing").Return("existing.ru", nil).Once()
+	mockStorage.On("GetLongURLWithContext", mock.Anything, "non-existing").Return("", storageErr).Once()
 	service := NewShortenerService(mockStorage, mockGenerator)
 	testCases := []struct {
 		name          string
@@ -75,13 +79,14 @@ func TestShortenerService_GetShortURL(t *testing.T) {
 		expectedError error
 	}{
 		{name: "existing", shortURL: "existing", expectedLong: "existing.ru", expectedError: nil},
-		{name: "non-existing", shortURL: "non-existing", expectedLong: "", expectedError: errors.New("no such short url")},
+		{name: "non-existing", shortURL: "non-existing", expectedLong: "",
+			expectedError: storageErr},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			longURL, err := service.GetLongURL(tc.shortURL)
-			require.Equal(t, tc.expectedError, err, "Ошибка не совпадает")
+			longURL, err := service.GetLongURLWithContext(context.Background(), tc.shortURL)
+			require.ErrorIs(t, err, tc.expectedError, "Ошибка не совпадает")
 			require.Equal(t, tc.expectedLong, longURL, "Короткий урл не совпадает")
 		})
 	}

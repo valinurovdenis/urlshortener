@@ -11,6 +11,7 @@ type Config struct {
 	BaseURL     string `env:"BASE_URL"`
 	LogLevel    string `env:"LOG_LEVEL"`
 	FileStorage string `env:"FILE_STORAGE_PATH"`
+	Database    string `env:"DATABASE_DSN"`
 	ShortLength int
 }
 
@@ -19,7 +20,8 @@ func parseFlags(config *Config) {
 	flag.StringVar(&config.BaseURL, "b", "http://localhost:8080", "address to return before short url")
 	flag.IntVar(&config.ShortLength, "c", 8, "length of short url")
 	flag.StringVar(&config.LogLevel, "l", "info", "log level")
-	flag.StringVar(&config.FileStorage, "f", "url_storage", "file storage path")
+	flag.StringVar(&config.FileStorage, "f", "", "file storage path")
+	flag.StringVar(&config.Database, "d", "", "database address")
 	flag.Parse()
 }
 

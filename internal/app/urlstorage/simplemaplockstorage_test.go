@@ -1,6 +1,7 @@
 package urlstorage
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -25,7 +26,7 @@ func TestSimpleMapLockStorage_GetLongURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.s.GetLongURL(tt.shortURL)
+			got, err := tt.s.GetLongURLWithContext(context.Background(), tt.shortURL)
 			if tt.wantErr != nil {
 				require.EqualError(t, err, tt.wantErr.Error())
 			} else {
@@ -53,7 +54,7 @@ func TestSimpleMapLockStorage_GetShortURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.s.GetShortURL(tt.longURL)
+			got, err := tt.s.GetShortURLWithContext(context.Background(), tt.longURL)
 			if tt.wantErr != nil {
 				require.EqualError(t, err, tt.wantErr.Error())
 			} else {
@@ -74,13 +75,13 @@ func TestSimpleMapLockStorage_Store(t *testing.T) {
 		shortURL      string
 		expectedError error
 	}{
-		{name: "store_a", longURL: "url_a", shortURL: "a", expectedError: nil},
+		{name: "store_a", longURL: "url_a", shortURL: "a", expectedError: ErrConflictURL},
 		{name: "store_b", longURL: "url_b", shortURL: "b", expectedError: nil},
 		{name: "store_empty", longURL: "", shortURL: "", expectedError: errors.New("cannot save empty url")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := storage.Store(tt.longURL, tt.shortURL)
+			err := storage.StoreWithContext(context.Background(), tt.longURL, tt.shortURL)
 			require.Equal(t, tt.expectedError, err)
 			if err == nil {
 				assert.Subset(t, storage.URL2ShortURL, map[string]string{tt.longURL: tt.shortURL})
@@ -104,8 +105,9 @@ func TestSimpleMapLockStorage_StoreMany(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := storage.StoreMany(tt.urlsToStore)
+			errs, err := storage.StoreManyWithContext(context.Background(), tt.urlsToStore)
 			require.Equal(t, tt.expectedError, err)
+			assert.Equal(t, errs, []error{ErrConflictURL, nil})
 			assert.Equal(t, storage.URL2ShortURL,
 				map[string]string{"url_a": "a", "url_b": "b"})
 			assert.Subset(t, storage.ShortURL2Url,
