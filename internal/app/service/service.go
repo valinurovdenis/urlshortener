@@ -8,6 +8,7 @@ import (
 
 	"github.com/valinurovdenis/urlshortener/internal/app/shortcutgenerator"
 	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
+	"github.com/valinurovdenis/urlshortener/internal/app/utils"
 )
 
 func sanitizeURL(origURL string) (string, error) {
@@ -31,7 +32,7 @@ type ShortenerService struct {
 
 var ErrConflictURL = errors.New("conflict long url")
 
-func (s *ShortenerService) GenerateShortURLWithContext(context context.Context, longURL string) (string, error) {
+func (s *ShortenerService) GenerateShortURLWithContext(context context.Context, longURL string, userID string) (string, error) {
 	longURL, err := sanitizeURL(longURL)
 	if err != nil {
 		return "", err
@@ -41,7 +42,7 @@ func (s *ShortenerService) GenerateShortURLWithContext(context context.Context, 
 	if err != nil {
 		return "", fmt.Errorf("cannot generate new url: %w", err)
 	}
-	err = s.URLStorage.StoreWithContext(context, longURL, shortURL)
+	err = s.URLStorage.StoreWithContext(context, longURL, shortURL, userID)
 	if errors.Is(err, urlstorage.ErrConflictURL) {
 		shortURL, err := s.URLStorage.GetShortURLWithContext(context, longURL)
 		if err == nil {
@@ -64,9 +65,9 @@ func (s *ShortenerService) GetLongURLWithContext(context context.Context, shortU
 	return longURL, nil
 }
 
-func (s *ShortenerService) GenerateShortURLBatchWithContext(context context.Context, longURLs []string) ([]string, error) {
+func (s *ShortenerService) GenerateShortURLBatchWithContext(context context.Context, longURLs []string, userID string) ([]string, error) {
 	var shortURLs []string
-	urls2Store := make(map[string]string)
+	var urls2Store []utils.URLPair
 	for _, longURL := range longURLs {
 		longURL, err := sanitizeURL(longURL)
 		if err != nil {
@@ -77,10 +78,11 @@ func (s *ShortenerService) GenerateShortURLBatchWithContext(context context.Cont
 		if err != nil {
 			return nil, errors.New("cannot generate new short url")
 		}
-		urls2Store[longURL] = shortURL
+		userURL := utils.URLPair{Short: shortURL, Long: longURL}
+		urls2Store = append(urls2Store, userURL)
 		shortURLs = append(shortURLs, shortURL)
 	}
-	errs, err := s.URLStorage.StoreManyWithContext(context, urls2Store)
+	errs, err := s.URLStorage.StoreManyWithContext(context, urls2Store, userID)
 	if err != nil {
 		return []string{}, err
 	}
@@ -99,6 +101,10 @@ func (s *ShortenerService) GenerateShortURLBatchWithContext(context context.Cont
 
 func (s *ShortenerService) Ping() error {
 	return s.URLStorage.Ping()
+}
+
+func (s *ShortenerService) GetUserURLs(context context.Context, userID string) ([]utils.URLPair, error) {
+	return s.URLStorage.GetUserURLs(context, userID)
 }
 
 func NewShortenerService(storage urlstorage.URLStorage, generator shortcutgenerator.ShortCutGenerator) *ShortenerService {

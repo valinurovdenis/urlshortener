@@ -42,8 +42,8 @@ func TestShortenerService_GenerateShortURL(t *testing.T) {
 	mockGenerator.On("Generate").Return("non-existing", nil).Twice()
 	mockStorage := mocks.NewURLStorage(t)
 	mockStorage.On("GetShortURLWithContext", mock.Anything, "http://existing.ru").Return("existing", nil).Once()
-	mockStorage.On("StoreWithContext", mock.Anything, "http://non-existing.ru", "non-existing").Return(nil).Once()
-	mockStorage.On("StoreWithContext", mock.Anything, "http://existing.ru", "non-existing").Return(urlstorage.ErrConflictURL).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "http://non-existing.ru", "non-existing", "").Return(nil).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "http://existing.ru", "non-existing", "").Return(urlstorage.ErrConflictURL).Once()
 	service := NewShortenerService(mockStorage, mockGenerator)
 	testCases := []struct {
 		name          string
@@ -58,7 +58,7 @@ func TestShortenerService_GenerateShortURL(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			shortURL, err := service.GenerateShortURLWithContext(context.Background(), tc.longURL)
+			shortURL, err := service.GenerateShortURLWithContext(context.Background(), tc.longURL, "")
 			require.Equal(t, tc.expectedError, err, "Ошибка не совпадает")
 			require.Equal(t, tc.expectedShort, shortURL, "Короткий урл не совпадает")
 		})
