@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"time"
 
+	"github.com/valinurovdenis/urlshortener/internal/app/logger"
 	"github.com/valinurovdenis/urlshortener/internal/app/shortcutgenerator"
 	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
 	"github.com/valinurovdenis/urlshortener/internal/app/utils"
+	"go.uber.org/zap"
 )
 
 func sanitizeURL(origURL string) (string, error) {
@@ -28,6 +31,7 @@ func sanitizeURL(origURL string) (string, error) {
 type ShortenerService struct {
 	URLStorage urlstorage.URLStorage
 	Generator  shortcutgenerator.ShortCutGenerator
+	deleteChan chan utils.URLsForDelete
 }
 
 var ErrConflictURL = errors.New("conflict long url")
@@ -57,8 +61,13 @@ func (s *ShortenerService) GenerateShortURLWithContext(context context.Context, 
 	return shortURL, nil
 }
 
+var ErrDeletedURL = errors.New("conflict long url")
+
 func (s *ShortenerService) GetLongURLWithContext(context context.Context, shortURL string) (string, error) {
 	longURL, err := s.URLStorage.GetLongURLWithContext(context, shortURL)
+	if errors.Is(err, urlstorage.ErrDeletedURL) {
+		return "", ErrDeletedURL
+	}
 	if err != nil {
 		return "", fmt.Errorf("no such short url: %w", err)
 	}
@@ -99,6 +108,35 @@ func (s *ShortenerService) GenerateShortURLBatchWithContext(context context.Cont
 	return shortURLs, nil
 }
 
+func (s *ShortenerService) DeleteUserURLs(ctx context.Context, userID string, shortURLs ...string) error {
+	urls := utils.URLsForDelete{UserID: userID, ShortURLs: shortURLs}
+	s.deleteChan <- urls
+	return nil
+}
+
+func (s *ShortenerService) flushDeletedUserURLs() {
+	ticker := time.NewTicker(10 * time.Second)
+
+	var urlsByUser []utils.URLsForDelete
+
+	for {
+		select {
+		case urls := <-s.deleteChan:
+			urlsByUser = append(urlsByUser, urls)
+		case <-ticker.C:
+			if len(urlsByUser) == 0 {
+				continue
+			}
+			err := s.URLStorage.DeleteUserURLs(context.TODO(), urlsByUser...)
+			if err != nil {
+				logger.Log.Error("cannot delete urls", zap.Error(err))
+				continue
+			}
+			urlsByUser = nil
+		}
+	}
+}
+
 func (s *ShortenerService) Ping() error {
 	return s.URLStorage.Ping()
 }
@@ -108,8 +146,11 @@ func (s *ShortenerService) GetUserURLs(context context.Context, userID string) (
 }
 
 func NewShortenerService(storage urlstorage.URLStorage, generator shortcutgenerator.ShortCutGenerator) *ShortenerService {
-	return &ShortenerService{
+	ret := &ShortenerService{
 		URLStorage: storage,
 		Generator:  generator,
+		deleteChan: make(chan utils.URLsForDelete, 1024),
 	}
+	go ret.flushDeletedUserURLs()
+	return ret
 }

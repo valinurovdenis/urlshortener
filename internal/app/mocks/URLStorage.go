@@ -33,6 +33,31 @@ func (_m *URLStorage) Clear() error {
 	return r0
 }
 
+// DeleteUserURLs provides a mock function with given fields: _a0, urls
+func (_m *URLStorage) DeleteUserURLs(_a0 context.Context, urls ...utils.URLsForDelete) error {
+	_va := make([]interface{}, len(urls))
+	for _i := range urls {
+		_va[_i] = urls[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, _a0)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteUserURLs")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, ...utils.URLsForDelete) error); ok {
+		r0 = rf(_a0, urls...)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // GetLongURLWithContext provides a mock function with given fields: _a0, shortURL
 func (_m *URLStorage) GetLongURLWithContext(_a0 context.Context, shortURL string) (string, error) {
 	ret := _m.Called(_a0, shortURL)

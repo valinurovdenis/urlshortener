@@ -88,6 +88,10 @@ func (s *SimpleMapLockStorage) GetUserURLs(ctx context.Context, userID string) (
 	return nil, errors.New("not implemented")
 }
 
+func (s *SimpleMapLockStorage) DeleteUserURLs(context context.Context, urls ...utils.URLsForDelete) error {
+	return errors.New("not implemented")
+}
+
 func NewSimpleMapLockStorage() *SimpleMapLockStorage {
 	return &SimpleMapLockStorage{
 		ShortURL2Url: make(map[string]string),

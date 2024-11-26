@@ -8,6 +8,7 @@ import (
 )
 
 var ErrConflictURL = errors.New("conflicting long url")
+var ErrDeletedURL = errors.New("url has been deleted")
 
 //go:generate mockery --name URLStorage
 type URLStorage interface {
@@ -20,6 +21,8 @@ type URLStorage interface {
 	StoreManyWithContext(context context.Context, long2ShortUrls []utils.URLPair, userID string) ([]error, error)
 
 	GetUserURLs(context context.Context, userID string) ([]utils.URLPair, error)
+
+	DeleteUserURLs(context context.Context, urls ...utils.URLsForDelete) error
 
 	Clear() error
 
