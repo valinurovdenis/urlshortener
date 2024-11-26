@@ -89,36 +89,6 @@ func (_m *URLStorage) GetShortURLWithContext(_a0 context.Context, longURL string
 	return r0, r1
 }
 
-// GetUserURLs provides a mock function with given fields: _a0, userID
-func (_m *URLStorage) GetUserURLs(_a0 context.Context, userID string) ([]utils.URLPair, error) {
-	ret := _m.Called(_a0, userID)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetUserURLs")
-	}
-
-	var r0 []utils.URLPair
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) ([]utils.URLPair, error)); ok {
-		return rf(_a0, userID)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, string) []utils.URLPair); ok {
-		r0 = rf(_a0, userID)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]utils.URLPair)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = rf(_a0, userID)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
 // Ping provides a mock function with given fields:
 func (_m *URLStorage) Ping() error {
 	ret := _m.Called()

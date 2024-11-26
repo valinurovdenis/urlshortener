@@ -30,7 +30,8 @@ func run() error {
 		return err
 	}
 
-	var storage urlstorage.URLStorage
+	var urlStorage urlstorage.URLStorage
+	var userURLStorage urlstorage.UserURLStorage
 	var userStorage userstorage.UserStorage
 	if config.Database != "" {
 		db, err := sql.Open("pgx", config.Database)
@@ -38,10 +39,14 @@ func run() error {
 			panic(err)
 		}
 		defer db.Close()
-		storage = urlstorage.NewDatabaseStorage(db)
+		storage := urlstorage.NewDatabaseStorage(db)
+		urlStorage = storage
+		userURLStorage = storage
 		userStorage = userstorage.NewDatabaseUserStorage(db)
 	} else {
-		storage = urlstorage.NewSimpleMapLockStorage()
+		storage := urlstorage.NewSimpleMapLockStorage()
+		urlStorage = storage
+		userURLStorage = storage
 		userStorage = userstorage.NewSimpleUserStorage()
 		if config.FileStorage != "" {
 			fileStorageWrapper, err := urlstorage.NewFileDumpWrapper(
@@ -50,13 +55,14 @@ func run() error {
 				return err
 			}
 			fileStorageWrapper.RestoreFromDump()
-			storage = fileStorageWrapper
+			urlStorage = fileStorageWrapper
 		}
 	}
 
 	generator := shortcutgenerator.NewRandBase64Generator(config.ShortLength)
-	service := service.NewShortenerService(storage, generator)
+	service := service.NewShortenerService(urlStorage, userURLStorage, generator)
 	auth := auth.NewAuthenticator(config.SecretKey, userStorage)
 	handler := handlers.NewShortenerHandler(*service, *auth, config.BaseURL+"/")
+	defer service.Stop()
 	return http.ListenAndServe(config.LocalURL, handlers.ShortenerRouter(*handler))
 }

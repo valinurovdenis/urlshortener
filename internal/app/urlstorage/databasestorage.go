@@ -21,7 +21,7 @@ func (s *DatabaseStorage) Init() error {
 		return err
 	}
 	defer tx.Rollback()
-	tx.Exec(`CREATE TABLE shortener("user_id" TEXT, "short_url" TEXT,"long_url" TEXT)`)
+	tx.Exec(`CREATE TABLE shortener("user_id" TEXT, "short_url" TEXT, "long_url" TEXT, "deleted" BOOLEAN DEFAULT false)`)
 	tx.Exec(`CREATE INDEX user_id_index ON shortener USING btree(user_id)`)
 	tx.Exec(`CREATE UNIQUE INDEX long_url_index ON shortener USING btree(long_url)`)
 	return tx.Commit()
@@ -29,11 +29,15 @@ func (s *DatabaseStorage) Init() error {
 
 func (s *DatabaseStorage) GetLongURLWithContext(ctx context.Context, shortURL string) (string, error) {
 	row := s.DB.QueryRowContext(ctx,
-		"SELECT long_url FROM shortener WHERE short_url = $1", shortURL)
+		"SELECT long_url, deleted FROM shortener WHERE short_url = $1", shortURL)
 	var longURL string
-	err := row.Scan(&longURL)
+	var deleted bool
+	err := row.Scan(&longURL, &deleted)
 	if err != nil {
 		return "", err
+	}
+	if deleted {
+		return "", ErrDeletedURL
 	}
 	return longURL, nil
 }
@@ -108,6 +112,31 @@ func (s *DatabaseStorage) GetUserURLs(ctx context.Context, userID string) ([]uti
 	}
 
 	return res, nil
+}
+
+func (s *DatabaseStorage) DeleteUserURLs(ctx context.Context, urlsByUser ...utils.URLsForDelete) error {
+	query :=
+		`UPDATE shortener SET deleted=true WHERE user_id = $1 and short_url = $2`
+
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, urls := range urlsByUser {
+		for _, url := range urls.ShortURLs {
+			stmt.ExecContext(ctx, urls.UserID, url)
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (s *DatabaseStorage) Clear() error {

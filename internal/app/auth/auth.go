@@ -66,7 +66,7 @@ func (a *JwtAuthenticator) getUserID(tokenString string) (int64, error) {
 	return claims.UserID, nil
 }
 
-func (a *JwtAuthenticator) MaybeWithAuth(h http.Handler) http.Handler {
+func (a *JwtAuthenticator) CreateUserIfNeeded(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("Authorization")
 		var userID int64
