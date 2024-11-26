@@ -3,6 +3,8 @@ package urlstorage
 import (
 	"context"
 	"errors"
+
+	"github.com/valinurovdenis/urlshortener/internal/app/utils"
 )
 
 var ErrConflictURL = errors.New("conflicting long url")
@@ -13,9 +15,11 @@ type URLStorage interface {
 
 	GetShortURLWithContext(context context.Context, longURL string) (string, error)
 
-	StoreWithContext(context context.Context, longURL string, shortURL string) error
+	StoreWithContext(context context.Context, longURL string, shortURL string, userID string) error
 
-	StoreManyWithContext(context context.Context, long2ShortUrls map[string]string) ([]error, error)
+	StoreManyWithContext(context context.Context, long2ShortUrls []utils.URLPair, userID string) ([]error, error)
+
+	GetUserURLs(context context.Context, userID string) ([]utils.URLPair, error)
 
 	Clear() error
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/valinurovdenis/urlshortener/internal/app/utils"
 )
 
 func TestSimpleMapLockStorage_GetLongURL(t *testing.T) {
@@ -81,7 +82,7 @@ func TestSimpleMapLockStorage_Store(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := storage.StoreWithContext(context.Background(), tt.longURL, tt.shortURL)
+			err := storage.StoreWithContext(context.Background(), tt.longURL, tt.shortURL, "")
 			require.Equal(t, tt.expectedError, err)
 			if err == nil {
 				assert.Subset(t, storage.URL2ShortURL, map[string]string{tt.longURL: tt.shortURL})
@@ -97,15 +98,18 @@ func TestSimpleMapLockStorage_StoreMany(t *testing.T) {
 		URL2ShortURL: map[string]string{"url_a": "a"}}
 	tests := []struct {
 		name          string
-		urlsToStore   map[string]string
+		urlsToStore   []utils.URLPair
 		expectedError error
 	}{
-		{name: "store_many", urlsToStore: map[string]string{"url_a": "a", "url_b": "b"},
+		{name: "store_many",
+			urlsToStore: []utils.URLPair{
+				{Long: "url_a", Short: "a"},
+				{Long: "url_b", Short: "b"}},
 			expectedError: nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			errs, err := storage.StoreManyWithContext(context.Background(), tt.urlsToStore)
+			errs, err := storage.StoreManyWithContext(context.Background(), tt.urlsToStore, "")
 			require.Equal(t, tt.expectedError, err)
 			assert.Equal(t, errs, []error{ErrConflictURL, nil})
 			assert.Equal(t, storage.URL2ShortURL,

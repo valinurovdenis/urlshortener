@@ -12,6 +12,7 @@ type Config struct {
 	LogLevel    string `env:"LOG_LEVEL"`
 	FileStorage string `env:"FILE_STORAGE_PATH"`
 	Database    string `env:"DATABASE_DSN"`
+	SecretKey   string `env:"SECRET_KEY"`
 	ShortLength int
 }
 
@@ -22,6 +23,7 @@ func parseFlags(config *Config) {
 	flag.StringVar(&config.LogLevel, "l", "info", "log level")
 	flag.StringVar(&config.FileStorage, "f", "", "file storage path")
 	flag.StringVar(&config.Database, "d", "", "database address")
+	flag.StringVar(&config.SecretKey, "k", "SECRET_KEY", "secret key")
 	flag.Parse()
 }
 

@@ -6,11 +6,13 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
+	"github.com/valinurovdenis/urlshortener/internal/app/auth"
 	"github.com/valinurovdenis/urlshortener/internal/app/handlers"
 	"github.com/valinurovdenis/urlshortener/internal/app/logger"
 	"github.com/valinurovdenis/urlshortener/internal/app/service"
 	"github.com/valinurovdenis/urlshortener/internal/app/shortcutgenerator"
 	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
+	"github.com/valinurovdenis/urlshortener/internal/app/userstorage"
 )
 
 func main() {
@@ -29,6 +31,7 @@ func run() error {
 	}
 
 	var storage urlstorage.URLStorage
+	var userStorage userstorage.UserStorage
 	if config.Database != "" {
 		db, err := sql.Open("pgx", config.Database)
 		if err != nil {
@@ -36,8 +39,10 @@ func run() error {
 		}
 		defer db.Close()
 		storage = urlstorage.NewDatabaseStorage(db)
+		userStorage = userstorage.NewDatabaseUserStorage(db)
 	} else {
 		storage = urlstorage.NewSimpleMapLockStorage()
+		userStorage = userstorage.NewSimpleUserStorage()
 		if config.FileStorage != "" {
 			fileStorageWrapper, err := urlstorage.NewFileDumpWrapper(
 				config.FileStorage, storage)
@@ -51,6 +56,7 @@ func run() error {
 
 	generator := shortcutgenerator.NewRandBase64Generator(config.ShortLength)
 	service := service.NewShortenerService(storage, generator)
-	handler := handlers.NewShortenerHandler(*service, config.BaseURL+"/")
+	auth := auth.NewAuthenticator(config.SecretKey, userStorage)
+	handler := handlers.NewShortenerHandler(*service, *auth, config.BaseURL+"/")
 	return http.ListenAndServe(config.LocalURL, handlers.ShortenerRouter(*handler))
 }
