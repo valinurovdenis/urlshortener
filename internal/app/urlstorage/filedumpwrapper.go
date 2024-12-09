@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"sync"
+
+	"github.com/valinurovdenis/urlshortener/internal/app/utils"
 )
 
 type URLDump struct {
@@ -53,8 +55,8 @@ type FileDumpWrapper struct {
 	dumpMutex  sync.Mutex
 }
 
-func (f *FileDumpWrapper) StoreWithContext(ctx context.Context, longURL string, shortURL string) error {
-	if err := f.URLStorage.StoreWithContext(ctx, longURL, shortURL); err != nil {
+func (f *FileDumpWrapper) StoreWithContext(ctx context.Context, longURL string, shortURL string, _ string) error {
+	if err := f.URLStorage.StoreWithContext(ctx, longURL, shortURL, ""); err != nil {
 		return err
 	}
 
@@ -67,7 +69,7 @@ func (f *FileDumpWrapper) StoreWithContext(ctx context.Context, longURL string, 
 
 func (f *FileDumpWrapper) RestoreFromDump() error {
 	f.URLStorage.Clear()
-	long2ShortUrls := make(map[string]string)
+	var long2ShortUrls []utils.URLPair
 	file, err := os.OpenFile(f.filename, os.O_RDONLY|os.O_CREATE, 0666)
 	if err != nil {
 		return err
@@ -81,14 +83,15 @@ func (f *FileDumpWrapper) RestoreFromDump() error {
 		if err != nil {
 			return err
 		}
-		long2ShortUrls[dump.OriginalURL] = dump.ShortURL
+		url := utils.URLPair{Short: dump.ShortURL, Long: dump.OriginalURL}
+		long2ShortUrls = append(long2ShortUrls, url)
 		f.counter = dump.UUID
 		data, err = reader.ReadBytes('\n')
 	}
 	if err != io.EOF {
 		return err
 	}
-	f.URLStorage.StoreManyWithContext(context.Background(), long2ShortUrls)
+	f.URLStorage.StoreManyWithContext(context.Background(), long2ShortUrls, "")
 	return nil
 }
 

@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/valinurovdenis/urlshortener/internal/app/mocks"
+	"github.com/valinurovdenis/urlshortener/internal/app/utils"
 )
 
 type Consumer struct {
@@ -59,13 +60,13 @@ func TestFileDumpWrapper_testDump(t *testing.T) {
 	testFilename := "test_dump"
 	defer os.Remove(testFilename)
 	mockStorage := mocks.NewURLStorage(t)
-	mockStorage.On("StoreWithContext", mock.Anything, "http://youtube.ru/1", "1").Return(nil).Once()
-	mockStorage.On("StoreWithContext", mock.Anything, "http://youtube.ru/2", "2").Return(nil).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "http://youtube.ru/1", "1", "").Return(nil).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "http://youtube.ru/2", "2", "").Return(nil).Once()
 	{
 		dumpWrapper, _ := NewFileDumpWrapper(testFilename, mockStorage)
 
-		dumpWrapper.StoreWithContext(context.Background(), "http://youtube.ru/1", "1")
-		dumpWrapper.StoreWithContext(context.Background(), "http://youtube.ru/2", "2")
+		dumpWrapper.StoreWithContext(context.Background(), "http://youtube.ru/1", "1", "")
+		dumpWrapper.StoreWithContext(context.Background(), "http://youtube.ru/2", "2", "")
 	}
 
 	consumer, _ := NewConsumer(testFilename)
@@ -86,15 +87,15 @@ func TestFileDumpWrapper_testDump(t *testing.T) {
 	checkEqualDumps(2)
 
 	mockStorage.On("Clear").Return(nil).Once()
-	mockStorage.On("StoreManyWithContext", mock.Anything, map[string]string{
-		"http://youtube.ru/1": "1",
-		"http://youtube.ru/2": "2"}).Return([]error{nil, nil}, nil).Once()
-	mockStorage.On("StoreWithContext", mock.Anything, "http://youtube.ru/3", "3").Return(nil).Once()
+	mockStorage.On("StoreManyWithContext", mock.Anything, []utils.URLPair{
+		{Long: "http://youtube.ru/1", Short: "1"},
+		{Long: "http://youtube.ru/2", Short: "2"}}, "").Return([]error{nil, nil}, nil).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "http://youtube.ru/3", "3", "").Return(nil).Once()
 	{
 		dumpWrapper, _ := NewFileDumpWrapper(testFilename, mockStorage)
 
 		dumpWrapper.RestoreFromDump()
-		dumpWrapper.StoreWithContext(context.Background(), "http://youtube.ru/3", "3")
+		dumpWrapper.StoreWithContext(context.Background(), "http://youtube.ru/3", "3", "")
 	}
 	checkEqualDumps(3)
 }
