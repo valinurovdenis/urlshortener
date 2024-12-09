@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
+	"github.com/valinurovdenis/urlshortener/internal/app/auth"
 	"github.com/valinurovdenis/urlshortener/internal/app/gzip"
 	"github.com/valinurovdenis/urlshortener/internal/app/logger"
 	"github.com/valinurovdenis/urlshortener/internal/app/service"
@@ -14,12 +15,17 @@ import (
 
 type ShortenerHandler struct {
 	Service service.ShortenerService
+	Auth    auth.JwtAuthenticator
 	Host    string
 }
 
 func (h *ShortenerHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 	shortURL := chi.URLParam(r, "url")
 	url, err := h.Service.GetLongURLWithContext(r.Context(), shortURL)
+	if errors.Is(err, service.ErrDeletedURL) {
+		w.WriteHeader(http.StatusGone)
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -28,12 +34,13 @@ func (h *ShortenerHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ShortenerHandler) Generate(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("user_id")
 	var rawURL []byte
 	var url string
 	var err error
 	rawURL, err = io.ReadAll(r.Body)
 	if err == nil {
-		url, err = h.Service.GenerateShortURLWithContext(r.Context(), string(rawURL))
+		url, err = h.Service.GenerateShortURLWithContext(r.Context(), string(rawURL), userID)
 	}
 
 	if err == nil {
@@ -57,6 +64,7 @@ type resultURL struct {
 }
 
 func (h *ShortenerHandler) GenerateJSON(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("user_id")
 	var shortURL string
 	var longURL inputURL
 	err := json.NewDecoder(r.Body).Decode(&longURL)
@@ -66,7 +74,7 @@ func (h *ShortenerHandler) GenerateJSON(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	shortURL, err = h.Service.GenerateShortURLWithContext(r.Context(), longURL.URL)
+	shortURL, err = h.Service.GenerateShortURLWithContext(r.Context(), longURL.URL, userID)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err == nil {
@@ -92,6 +100,7 @@ type ResultBatch struct {
 }
 
 func (h *ShortenerHandler) GenerateBatch(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("user_id")
 	var inputBatch []InputBatch
 	var resultBatch []ResultBatch
 	var longURLs []string
@@ -103,7 +112,7 @@ func (h *ShortenerHandler) GenerateBatch(w http.ResponseWriter, r *http.Request)
 	for _, v := range inputBatch {
 		longURLs = append(longURLs, v.URL)
 	}
-	shortURLs, err := h.Service.GenerateShortURLBatchWithContext(r.Context(), longURLs)
+	shortURLs, err := h.Service.GenerateShortURLBatchWithContext(r.Context(), longURLs, userID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -127,18 +136,65 @@ func (h *ShortenerHandler) Ping(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func NewShortenerHandler(service service.ShortenerService, host string) *ShortenerHandler {
-	return &ShortenerHandler{Service: service, Host: host}
+type UserURL struct {
+	ShortURL string `json:"short_url"`
+	LongURL  string `json:"original_url"`
+}
+
+func (h *ShortenerHandler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("user_id")
+	userURLs, err := h.Service.GetUserURLs(r.Context(), userID)
+	var resultURLs []UserURL
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if len(userURLs) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
+	for i := range userURLs {
+		url := UserURL{ShortURL: h.Host + userURLs[i].Short, LongURL: userURLs[i].Long}
+		resultURLs = append(resultURLs, url)
+	}
+	json.NewEncoder(w).Encode(resultURLs)
+}
+
+func (h *ShortenerHandler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("user_id")
+	var urls []string
+	if err := json.NewDecoder(r.Body).Decode(&urls); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err := h.Service.DeleteUserURLs(r.Context(), userID, urls...)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	} else {
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+func NewShortenerHandler(service service.ShortenerService, auth auth.JwtAuthenticator, host string) *ShortenerHandler {
+	return &ShortenerHandler{Service: service, Auth: auth, Host: host}
 }
 
 func ShortenerRouter(handler ShortenerHandler) chi.Router {
 	r := chi.NewRouter()
 	r.Use(logger.RequestLogger)
 	r.Use(gzip.GzipMiddleware)
-	r.Post("/", handler.Generate)
-	r.Post("/api/shorten", handler.GenerateJSON)
-	r.Post("/api/shorten/batch", handler.GenerateBatch)
-	r.Get("/{url}", handler.Redirect)
-	r.Get("/ping", handler.Ping)
+	r.Route("/", func(r chi.Router) {
+		r.Use(handler.Auth.CreateUserIfNeeded)
+		r.Post("/", handler.Generate)
+		r.Post("/api/shorten", handler.GenerateJSON)
+		r.Post("/api/shorten/batch", handler.GenerateBatch)
+		r.Get("/{url}", handler.Redirect)
+		r.Get("/ping", handler.Ping)
+	})
+
+	r.With(handler.Auth.OnlyWithAuth).Get("/api/user/urls", handler.GetUserURLs)
+	r.With(handler.Auth.OnlyWithAuth).Delete("/api/user/urls", handler.DeleteUserURLs)
 	return r
 }

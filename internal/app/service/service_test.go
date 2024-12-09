@@ -42,9 +42,10 @@ func TestShortenerService_GenerateShortURL(t *testing.T) {
 	mockGenerator.On("Generate").Return("non-existing", nil).Twice()
 	mockStorage := mocks.NewURLStorage(t)
 	mockStorage.On("GetShortURLWithContext", mock.Anything, "http://existing.ru").Return("existing", nil).Once()
-	mockStorage.On("StoreWithContext", mock.Anything, "http://non-existing.ru", "non-existing").Return(nil).Once()
-	mockStorage.On("StoreWithContext", mock.Anything, "http://existing.ru", "non-existing").Return(urlstorage.ErrConflictURL).Once()
-	service := NewShortenerService(mockStorage, mockGenerator)
+	mockStorage.On("StoreWithContext", mock.Anything, "http://non-existing.ru", "non-existing", "").Return(nil).Once()
+	mockStorage.On("StoreWithContext", mock.Anything, "http://existing.ru", "non-existing", "").Return(urlstorage.ErrConflictURL).Once()
+	mockUserStorage := mocks.NewUserURLStorage(t)
+	service := NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
 	testCases := []struct {
 		name          string
 		longURL       string
@@ -58,7 +59,7 @@ func TestShortenerService_GenerateShortURL(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			shortURL, err := service.GenerateShortURLWithContext(context.Background(), tc.longURL)
+			shortURL, err := service.GenerateShortURLWithContext(context.Background(), tc.longURL, "")
 			require.Equal(t, tc.expectedError, err, "Ошибка не совпадает")
 			require.Equal(t, tc.expectedShort, shortURL, "Короткий урл не совпадает")
 		})
@@ -71,7 +72,8 @@ func TestShortenerService_GetShortURL(t *testing.T) {
 	storageErr := errors.New("not found")
 	mockStorage.On("GetLongURLWithContext", mock.Anything, "existing").Return("existing.ru", nil).Once()
 	mockStorage.On("GetLongURLWithContext", mock.Anything, "non-existing").Return("", storageErr).Once()
-	service := NewShortenerService(mockStorage, mockGenerator)
+	mockUserStorage := mocks.NewUserURLStorage(t)
+	service := NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
 	testCases := []struct {
 		name          string
 		shortURL      string

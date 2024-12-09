@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"sync"
+
+	"github.com/valinurovdenis/urlshortener/internal/app/utils"
 )
 
 type SimpleMapLockStorage struct {
@@ -34,7 +36,7 @@ func (s *SimpleMapLockStorage) GetShortURLWithContext(_ context.Context, longURL
 	}
 }
 
-func (s *SimpleMapLockStorage) StoreWithContext(_ context.Context, longURL string, shortURL string) error {
+func (s *SimpleMapLockStorage) StoreWithContext(_ context.Context, longURL string, shortURL string, _ string) error {
 	if shortURL == "" {
 		return errors.New("cannot save empty url")
 	}
@@ -50,11 +52,13 @@ func (s *SimpleMapLockStorage) StoreWithContext(_ context.Context, longURL strin
 	return nil
 }
 
-func (s *SimpleMapLockStorage) StoreManyWithContext(_ context.Context, long2ShortUrls map[string]string) ([]error, error) {
+func (s *SimpleMapLockStorage) StoreManyWithContext(_ context.Context, long2ShortUrls []utils.URLPair, _ string) ([]error, error) {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 	var errs []error
-	for longURL, shortURL := range long2ShortUrls {
+	for i := range long2ShortUrls {
+		longURL := long2ShortUrls[i].Long
+		shortURL := long2ShortUrls[i].Short
 		if shortURL == "" {
 			continue
 		}
@@ -78,6 +82,14 @@ func (s *SimpleMapLockStorage) Clear() error {
 
 func (s *SimpleMapLockStorage) Ping() error {
 	return nil
+}
+
+func (s *SimpleMapLockStorage) GetUserURLs(ctx context.Context, userID string) ([]utils.URLPair, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *SimpleMapLockStorage) DeleteUserURLs(context context.Context, urls ...utils.URLsForDelete) error {
+	return errors.New("not implemented")
 }
 
 func NewSimpleMapLockStorage() *SimpleMapLockStorage {
