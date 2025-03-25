@@ -7,10 +7,12 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 	"github.com/valinurovdenis/urlshortener/internal/app/auth"
 	"github.com/valinurovdenis/urlshortener/internal/app/gzip"
 	"github.com/valinurovdenis/urlshortener/internal/app/logger"
 	"github.com/valinurovdenis/urlshortener/internal/app/service"
+	"github.com/valinurovdenis/urlshortener/internal/app/utils"
 )
 
 type ShortenerHandler struct {
@@ -52,7 +54,7 @@ func (h *ShortenerHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write([]byte(h.Host + url))
+	w.Write([]byte(utils.AddStrings(h.Host, url)))
 }
 
 type inputURL struct {
@@ -86,7 +88,7 @@ func (h *ShortenerHandler) GenerateJSON(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	json.NewEncoder(w).Encode(resultURL{h.Host + shortURL})
+	json.NewEncoder(w).Encode(resultURL{utils.AddStrings(h.Host, shortURL)})
 }
 
 type InputBatch struct {
@@ -181,20 +183,27 @@ func NewShortenerHandler(service service.ShortenerService, auth auth.JwtAuthenti
 	return &ShortenerHandler{Service: service, Auth: auth, Host: host}
 }
 
-func ShortenerRouter(handler ShortenerHandler) chi.Router {
+func ShortenerRouter(handler ShortenerHandler, isProduction bool) chi.Router {
 	r := chi.NewRouter()
-	r.Use(logger.RequestLogger)
-	r.Use(gzip.GzipMiddleware)
-	r.Route("/", func(r chi.Router) {
-		r.Use(handler.Auth.CreateUserIfNeeded)
-		r.Post("/", handler.Generate)
-		r.Post("/api/shorten", handler.GenerateJSON)
-		r.Post("/api/shorten/batch", handler.GenerateBatch)
-		r.Get("/{url}", handler.Redirect)
-		r.Get("/ping", handler.Ping)
+	if !isProduction {
+		r.Mount("/debug", middleware.Profiler())
+	}
+
+	r.Group(func(r chi.Router) {
+		r.Use(logger.RequestLogger)
+		r.Use(gzip.GzipMiddleware)
+		r.Route("/", func(r chi.Router) {
+			r.Use(handler.Auth.CreateUserIfNeeded)
+			r.Post("/", handler.Generate)
+			r.Post("/api/shorten", handler.GenerateJSON)
+			r.Post("/api/shorten/batch", handler.GenerateBatch)
+			r.Get("/{url}", handler.Redirect)
+			r.Get("/ping", handler.Ping)
+		})
+
+		r.With(handler.Auth.OnlyWithAuth).Get("/api/user/urls", handler.GetUserURLs)
+		r.With(handler.Auth.OnlyWithAuth).Delete("/api/user/urls", handler.DeleteUserURLs)
 	})
 
-	r.With(handler.Auth.OnlyWithAuth).Get("/api/user/urls", handler.GetUserURLs)
-	r.With(handler.Auth.OnlyWithAuth).Delete("/api/user/urls", handler.DeleteUserURLs)
 	return r
 }

@@ -1,21 +1,21 @@
 package shortcutgenerator
 
 import (
-	"crypto/rand"
-	"encoding/base64"
+	"math/rand"
 )
 
 type RandBase64Generator struct {
 	Length int
 }
 
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
 func (s RandBase64Generator) Generate() (string, error) {
-	buffer := make([]byte, s.Length)
-	_, err := rand.Read(buffer)
-	if err != nil {
-		return "", err
+	b := make([]rune, s.Length)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
-	return base64.URLEncoding.EncodeToString(buffer)[:s.Length], nil
+	return string(b), nil
 }
 
 func NewRandBase64Generator(length int) *RandBase64Generator {

@@ -64,5 +64,5 @@ func run() error {
 	auth := auth.NewAuthenticator(config.SecretKey, userStorage)
 	handler := handlers.NewShortenerHandler(*service, *auth, config.BaseURL+"/")
 	defer service.Stop()
-	return http.ListenAndServe(config.LocalURL, handlers.ShortenerRouter(*handler))
+	return http.ListenAndServe(config.LocalURL, handlers.ShortenerRouter(*handler, config.IsProduction))
 }
