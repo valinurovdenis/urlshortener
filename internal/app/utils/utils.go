@@ -1,17 +1,9 @@
+// Package for auxiliary functions and structs.
 package utils
 
 import "bytes"
 
-type URLPair struct {
-	Short string
-	Long  string
-}
-
-type URLsForDelete struct {
-	UserID    string
-	ShortURLs []string
-}
-
+// Concatenates all given strings in one.
 func AddStrings(strings ...string) string {
 	bufferLength := 0
 	for _, s := range strings {

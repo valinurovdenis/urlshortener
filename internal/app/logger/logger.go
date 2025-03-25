@@ -1,3 +1,4 @@
+// Package for logging incoming requests.
 package logger
 
 import (
@@ -7,8 +8,11 @@ import (
 	"go.uber.org/zap"
 )
 
+// Initialize zap logger.
 var Log *zap.Logger = zap.NewNop()
 
+// Initializes logging.
+// Returns error if level cant be determined.
 func Initialize(level string) error {
 	lvl, err := zap.ParseAtomicLevel(level)
 	if err != nil {
@@ -36,18 +40,22 @@ type (
 	}
 )
 
+// Overrides writer function and saves response size.
 func (r *loggingResponseWriter) Write(b []byte) (int, error) {
 	size, err := r.ResponseWriter.Write(b)
 	r.responseData.size += size
 	return size, err
 }
 
+// Overrides writer function and saves response status code.
 func (r *loggingResponseWriter) WriteHeader(statusCode int) {
 	r.ResponseWriter.WriteHeader(statusCode)
 	r.responseData.status = statusCode
 }
 
-func RequestLogger(h http.Handler) http.Handler {
+// Middleware for logging incoming requests and reponses.
+// Writes processing metrics such as method, path, status, size, duration of request.
+func RequestLoggerMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 

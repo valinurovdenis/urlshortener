@@ -4,16 +4,23 @@ import (
 	"context"
 	"errors"
 	"sync"
-
-	"github.com/valinurovdenis/urlshortener/internal/app/utils"
 )
 
+// Storage storing urls in memory.
 type SimpleMapLockStorage struct {
 	ShortURL2Url map[string]string
 	URL2ShortURL map[string]string
-	Mutex        sync.Mutex
+	Mutex        sync.Mutex // for thread safe storage operations
 }
 
+// New inmemory url storage.
+func NewSimpleMapLockStorage() *SimpleMapLockStorage {
+	return &SimpleMapLockStorage{
+		ShortURL2Url: make(map[string]string),
+		URL2ShortURL: make(map[string]string)}
+}
+
+// Returns longURL from shortURL.
 func (s *SimpleMapLockStorage) GetLongURLWithContext(_ context.Context, shortURL string) (string, error) {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
@@ -25,6 +32,7 @@ func (s *SimpleMapLockStorage) GetLongURLWithContext(_ context.Context, shortURL
 	}
 }
 
+// Returns shortURL from longURL.
 func (s *SimpleMapLockStorage) GetShortURLWithContext(_ context.Context, longURL string) (string, error) {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
@@ -36,6 +44,7 @@ func (s *SimpleMapLockStorage) GetShortURLWithContext(_ context.Context, longURL
 	}
 }
 
+// Adds mapping longURL -> shortURL.
 func (s *SimpleMapLockStorage) StoreWithContext(_ context.Context, longURL string, shortURL string, _ string) error {
 	if shortURL == "" {
 		return errors.New("cannot save empty url")
@@ -52,7 +61,8 @@ func (s *SimpleMapLockStorage) StoreWithContext(_ context.Context, longURL strin
 	return nil
 }
 
-func (s *SimpleMapLockStorage) StoreManyWithContext(_ context.Context, long2ShortUrls []utils.URLPair, _ string) ([]error, error) {
+// Adds number of mappings longURL -> shortURL.
+func (s *SimpleMapLockStorage) StoreManyWithContext(_ context.Context, long2ShortUrls []URLPair, _ string) ([]error, error) {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 	var errs []error
@@ -74,26 +84,28 @@ func (s *SimpleMapLockStorage) StoreManyWithContext(_ context.Context, long2Shor
 	return errs, nil
 }
 
+// Clear all mappings.
 func (s *SimpleMapLockStorage) Clear() error {
 	s.ShortURL2Url = make(map[string]string)
 	s.URL2ShortURL = make(map[string]string)
 	return nil
 }
 
+// Check whether storage alive.
 func (s *SimpleMapLockStorage) Ping() error {
 	return nil
 }
 
-func (s *SimpleMapLockStorage) GetUserURLs(ctx context.Context, userID string) ([]utils.URLPair, error) {
+// TODO: implement
+//
+// Returns all urls saved by user.
+func (s *SimpleMapLockStorage) GetUserURLs(ctx context.Context, userID string) ([]URLPair, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (s *SimpleMapLockStorage) DeleteUserURLs(context context.Context, urls ...utils.URLsForDelete) error {
+// TODO: implement
+//
+// Returns all urls saved by user.
+func (s *SimpleMapLockStorage) DeleteUserURLs(context context.Context, urls ...URLsForDelete) error {
 	return errors.New("not implemented")
-}
-
-func NewSimpleMapLockStorage() *SimpleMapLockStorage {
-	return &SimpleMapLockStorage{
-		ShortURL2Url: make(map[string]string),
-		URL2ShortURL: make(map[string]string)}
 }

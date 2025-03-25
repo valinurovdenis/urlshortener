@@ -8,14 +8,22 @@ import (
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/valinurovdenis/urlshortener/internal/app/utils"
 )
 
+// Storage storing urls in postgresql.
 type DatabaseStorage struct {
 	DB *sql.DB
 }
 
-func (s *DatabaseStorage) Init() error {
+// New postgresql storage.
+func NewDatabaseStorage(db *sql.DB) *DatabaseStorage {
+	ret := &DatabaseStorage{DB: db}
+	ret.init()
+	return ret
+}
+
+// Creates all tables if needed.
+func (s *DatabaseStorage) init() error {
 	tx, err := s.DB.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
@@ -27,6 +35,7 @@ func (s *DatabaseStorage) Init() error {
 	return tx.Commit()
 }
 
+// Returns longURL from shortURL.
 func (s *DatabaseStorage) GetLongURLWithContext(ctx context.Context, shortURL string) (string, error) {
 	row := s.DB.QueryRowContext(ctx,
 		"SELECT long_url, deleted FROM shortener WHERE short_url = $1", shortURL)
@@ -42,6 +51,7 @@ func (s *DatabaseStorage) GetLongURLWithContext(ctx context.Context, shortURL st
 	return longURL, nil
 }
 
+// Returns shortURL from longURL.
 func (s *DatabaseStorage) GetShortURLWithContext(ctx context.Context, longURL string) (string, error) {
 	row := s.DB.QueryRowContext(ctx,
 		"SELECT short_url FROM shortener WHERE long_url = $1", longURL)
@@ -53,7 +63,11 @@ func (s *DatabaseStorage) GetShortURLWithContext(ctx context.Context, longURL st
 	return shortURL, nil
 }
 
+// Adds mapping longURL -> shortURL.
 func (s *DatabaseStorage) StoreWithContext(ctx context.Context, longURL string, shortURL string, userID string) error {
+	if longURL == "" {
+		return ErrEmptyLongURL
+	}
 	_, err := s.DB.ExecContext(ctx,
 		"INSERT into shortener (user_id, short_url, long_url) VALUES($1, $2, $3)", userID, shortURL, longURL)
 	if e, ok := err.(*pgconn.PgError); ok && e.Code == pgerrcode.UniqueViolation {
@@ -62,7 +76,8 @@ func (s *DatabaseStorage) StoreWithContext(ctx context.Context, longURL string, 
 	return err
 }
 
-func (s *DatabaseStorage) StoreManyWithContext(ctx context.Context, long2ShortUrls []utils.URLPair, userID string) ([]error, error) {
+// Adds number of mappings longURL -> shortURL.
+func (s *DatabaseStorage) StoreManyWithContext(ctx context.Context, long2ShortUrls []URLPair, userID string) ([]error, error) {
 	var errs []error
 	tx, err := s.DB.Begin()
 	if err != nil {
@@ -90,8 +105,9 @@ func (s *DatabaseStorage) StoreManyWithContext(ctx context.Context, long2ShortUr
 	return errs, nil
 }
 
-func (s *DatabaseStorage) GetUserURLs(ctx context.Context, userID string) ([]utils.URLPair, error) {
-	var res []utils.URLPair
+// Returns all urls saved by user.
+func (s *DatabaseStorage) GetUserURLs(ctx context.Context, userID string) ([]URLPair, error) {
+	var res []URLPair
 	rows, err := s.DB.QueryContext(ctx,
 		"SELECT short_url, long_url FROM shortener WHERE user_id = $1", userID)
 	if err != nil {
@@ -102,7 +118,7 @@ func (s *DatabaseStorage) GetUserURLs(ctx context.Context, userID string) ([]uti
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var userURL utils.URLPair
+		var userURL URLPair
 		err = rows.Scan(&userURL.Short, &userURL.Long)
 		if err != nil {
 			return nil, err
@@ -114,7 +130,8 @@ func (s *DatabaseStorage) GetUserURLs(ctx context.Context, userID string) ([]uti
 	return res, nil
 }
 
-func (s *DatabaseStorage) DeleteUserURLs(ctx context.Context, urlsByUser ...utils.URLsForDelete) error {
+// Deletes given urls previously saved by user.
+func (s *DatabaseStorage) DeleteUserURLs(ctx context.Context, urlsByUser ...URLsForDelete) error {
 	query :=
 		`UPDATE shortener SET deleted=true WHERE user_id = $1 and short_url = $2`
 
@@ -139,18 +156,14 @@ func (s *DatabaseStorage) DeleteUserURLs(ctx context.Context, urlsByUser ...util
 	return tx.Commit()
 }
 
+// Clear all mappings.
 func (s *DatabaseStorage) Clear() error {
 	return errors.New("not implemented")
 }
 
+// Storage contains urls saved and deleted by user.
 func (s *DatabaseStorage) Ping() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	return s.DB.PingContext(ctx)
-}
-
-func NewDatabaseStorage(db *sql.DB) *DatabaseStorage {
-	ret := &DatabaseStorage{DB: db}
-	ret.Init()
-	return ret
 }

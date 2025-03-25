@@ -1,3 +1,4 @@
+// Package for authorization middlewares.
 package auth
 
 import (
@@ -10,6 +11,7 @@ import (
 	"github.com/valinurovdenis/urlshortener/internal/app/userstorage"
 )
 
+// Struct for parsing user id from jwt token.
 type Claims struct {
 	jwt.RegisteredClaims
 	UserID int64
@@ -17,11 +19,14 @@ type Claims struct {
 
 const tokenExpiration = time.Hour * 3
 
+// Class for authentication via jwt tokens.
 type JwtAuthenticator struct {
 	SecretKey   string
 	UserStorage userstorage.UserStorage
 }
 
+// Returns new authenticator.
+// Requires secret key for jwt and storage for generatings user ids.
 func NewAuthenticator(secretKey string, userStorage userstorage.UserStorage) *JwtAuthenticator {
 	return &JwtAuthenticator{
 		SecretKey:   secretKey,
@@ -29,6 +34,7 @@ func NewAuthenticator(secretKey string, userStorage userstorage.UserStorage) *Jw
 	}
 }
 
+// Builds jwt string from given user id.
 func (a *JwtAuthenticator) buildJWTString(userID int64) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -45,6 +51,8 @@ func (a *JwtAuthenticator) buildJWTString(userID int64) (string, error) {
 	return tokenString, nil
 }
 
+// Parses user id from jwt token string.
+// Returns error if no jwt token is not valid.
 func (a *JwtAuthenticator) getUserID(tokenString string) (int64, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims,
@@ -66,6 +74,8 @@ func (a *JwtAuthenticator) getUserID(tokenString string) (int64, error) {
 	return claims.UserID, nil
 }
 
+// Middleware creates new user if no authorization cookie with valid user provided.
+// Returns new authorization cookie if new user has been created.
 func (a *JwtAuthenticator) CreateUserIfNeeded(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("Authorization")
@@ -87,6 +97,8 @@ func (a *JwtAuthenticator) CreateUserIfNeeded(h http.Handler) http.Handler {
 	})
 }
 
+// Middleware checks whether there is authorization cookie with valid user.
+// Returns 401 if valid user not found.
 func (a *JwtAuthenticator) OnlyWithAuth(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("Authorization")

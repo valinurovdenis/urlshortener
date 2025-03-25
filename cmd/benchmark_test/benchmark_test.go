@@ -1,4 +1,4 @@
-package main
+package benchmark_test
 
 import (
 	"bytes"
@@ -7,15 +7,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"runtime/pprof"
-
-	_ "net/http/pprof"
-
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"strconv"
 
 	"github.com/valinurovdenis/urlshortener/internal/app/auth"
 	"github.com/valinurovdenis/urlshortener/internal/app/handlers"
@@ -73,16 +69,6 @@ type inputURL struct {
 	URL string `json:"url"`
 }
 
-var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func randStringRunes(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
-	}
-	return string(b)
-}
-
 func benchmarkGenerateAPI(ts *httptest.Server, c chan struct{}) {
 	path := "/api/shorten"
 	generateErrors := 0
@@ -90,7 +76,7 @@ func benchmarkGenerateAPI(ts *httptest.Server, c chan struct{}) {
 
 	for i := 0; i < maxSize; i++ {
 		var input bytes.Buffer
-		randomURL := randStringRunes(10) + ".com"
+		randomURL := strconv.Itoa(i) + ".com"
 		json.NewEncoder(&input).Encode(inputURL{randomURL})
 		req, _ := http.NewRequest(http.MethodPost, ts.URL+path, &input)
 		resp, err := ts.Client().Do(req)

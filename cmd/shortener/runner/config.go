@@ -1,4 +1,4 @@
-package main
+package runner
 
 import (
 	"flag"
@@ -6,6 +6,9 @@ import (
 	"reflect"
 )
 
+// Struct contains all service settings.
+//
+// Settings read both from env and from args.
 type Config struct {
 	LocalURL     string `env:"SERVER_ADDRESS"`
 	BaseURL      string `env:"BASE_URL"`
