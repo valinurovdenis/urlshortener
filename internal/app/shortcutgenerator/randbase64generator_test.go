@@ -23,3 +23,11 @@ func TestRandBase64Generator_Generate(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkRandBase64Generator_Generate(b *testing.B) {
+	generator := NewRandBase64Generator(5)
+
+	for i := 0; i < 1000; i++ {
+		generator.Generate()
+	}
+}

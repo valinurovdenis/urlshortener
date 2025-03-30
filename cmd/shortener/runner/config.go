@@ -1,4 +1,4 @@
-package main
+package runner
 
 import (
 	"flag"
@@ -6,14 +6,18 @@ import (
 	"reflect"
 )
 
+// Struct contains all service settings.
+//
+// Settings read both from env and from args.
 type Config struct {
-	LocalURL    string `env:"SERVER_ADDRESS"`
-	BaseURL     string `env:"BASE_URL"`
-	LogLevel    string `env:"LOG_LEVEL"`
-	FileStorage string `env:"FILE_STORAGE_PATH"`
-	Database    string `env:"DATABASE_DSN"`
-	SecretKey   string `env:"SECRET_KEY"`
-	ShortLength int
+	LocalURL     string `env:"SERVER_ADDRESS"`
+	BaseURL      string `env:"BASE_URL"`
+	LogLevel     string `env:"LOG_LEVEL"`
+	FileStorage  string `env:"FILE_STORAGE_PATH"`
+	Database     string `env:"DATABASE_DSN"`
+	SecretKey    string `env:"SECRET_KEY"`
+	ShortLength  int
+	IsProduction bool
 }
 
 func parseFlags(config *Config) {
@@ -24,6 +28,7 @@ func parseFlags(config *Config) {
 	flag.StringVar(&config.FileStorage, "f", "", "file storage path")
 	flag.StringVar(&config.Database, "d", "", "database address")
 	flag.StringVar(&config.SecretKey, "k", "SECRET_KEY", "secret key")
+	flag.BoolVar(&config.IsProduction, "p", false, "is production")
 	flag.Parse()
 }
 

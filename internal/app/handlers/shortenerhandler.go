@@ -1,3 +1,4 @@
+// Package contains service handlers for chi router.
 package handlers
 
 import (
@@ -7,18 +8,27 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 	"github.com/valinurovdenis/urlshortener/internal/app/auth"
 	"github.com/valinurovdenis/urlshortener/internal/app/gzip"
 	"github.com/valinurovdenis/urlshortener/internal/app/logger"
 	"github.com/valinurovdenis/urlshortener/internal/app/service"
+	"github.com/valinurovdenis/urlshortener/internal/app/utils"
 )
 
+// Main class for chi handlers.
 type ShortenerHandler struct {
 	Service service.ShortenerService
 	Auth    auth.JwtAuthenticator
 	Host    string
 }
 
+// Shortener handler contains shortener service, authenticator.
+func NewShortenerHandler(service service.ShortenerService, auth auth.JwtAuthenticator, host string) *ShortenerHandler {
+	return &ShortenerHandler{Service: service, Auth: auth, Host: host}
+}
+
+// Handler for redirecting to long url by short url.
 func (h *ShortenerHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 	shortURL := chi.URLParam(r, "url")
 	url, err := h.Service.GetLongURLWithContext(r.Context(), shortURL)
@@ -33,6 +43,7 @@ func (h *ShortenerHandler) Redirect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
+// Handler for generating short url from long url.
 func (h *ShortenerHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("user_id")
 	var rawURL []byte
@@ -52,21 +63,24 @@ func (h *ShortenerHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write([]byte(h.Host + url))
+	w.Write([]byte(utils.AddStrings(h.Host, url)))
 }
 
-type inputURL struct {
+// Input type for json handler.
+type InputURL struct {
 	URL string `json:"url"`
 }
 
-type resultURL struct {
+// Output type for json handler.
+type ResultURL struct {
 	URL string `json:"result"`
 }
 
+// Same as Generate, but in json format.
 func (h *ShortenerHandler) GenerateJSON(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("user_id")
 	var shortURL string
-	var longURL inputURL
+	var longURL InputURL
 	err := json.NewDecoder(r.Body).Decode(&longURL)
 
 	if err != nil {
@@ -86,30 +100,33 @@ func (h *ShortenerHandler) GenerateJSON(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	json.NewEncoder(w).Encode(resultURL{h.Host + shortURL})
+	json.NewEncoder(w).Encode(ResultURL{utils.AddStrings(h.Host, shortURL)})
 }
 
-type InputBatch struct {
+// Input type for generating batch.
+type inputBatch struct {
 	URL string `json:"original_url"`
 	ID  string `json:"correlation_id"`
 }
 
-type ResultBatch struct {
+// Output type for generating batch.
+type resultBatch struct {
 	URL string `json:"short_url"`
 	ID  string `json:"correlation_id"`
 }
 
+// Handler for generating long urls in batch mode.
 func (h *ShortenerHandler) GenerateBatch(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("user_id")
-	var inputBatch []InputBatch
-	var resultBatch []ResultBatch
+	var input []inputBatch
+	var result []resultBatch
 	var longURLs []string
-	if err := json.NewDecoder(r.Body).Decode(&inputBatch); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	for _, v := range inputBatch {
+	for _, v := range input {
 		longURLs = append(longURLs, v.URL)
 	}
 	shortURLs, err := h.Service.GenerateShortURLBatchWithContext(r.Context(), longURLs, userID)
@@ -119,14 +136,15 @@ func (h *ShortenerHandler) GenerateBatch(w http.ResponseWriter, r *http.Request)
 	}
 	for i, shortURL := range shortURLs {
 		if shortURL != "" {
-			resultBatch = append(resultBatch, ResultBatch{ID: inputBatch[i].ID, URL: h.Host + shortURL})
+			result = append(result, resultBatch{ID: input[i].ID, URL: h.Host + shortURL})
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(resultBatch)
+	json.NewEncoder(w).Encode(result)
 }
 
+// Ping that service is still alive.
 func (h *ShortenerHandler) Ping(w http.ResponseWriter, r *http.Request) {
 	err := h.Service.Ping()
 	if err != nil {
@@ -136,11 +154,13 @@ func (h *ShortenerHandler) Ping(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Main structure for pair mapping LongURL <-> ShortURL
 type UserURL struct {
 	ShortURL string `json:"short_url"`
 	LongURL  string `json:"original_url"`
 }
 
+// Get all urls saved by user.
 func (h *ShortenerHandler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("user_id")
 	userURLs, err := h.Service.GetUserURLs(r.Context(), userID)
@@ -162,6 +182,7 @@ func (h *ShortenerHandler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resultURLs)
 }
 
+// Delete urls saved by user.
 func (h *ShortenerHandler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("user_id")
 	var urls []string
@@ -177,24 +198,28 @@ func (h *ShortenerHandler) DeleteUserURLs(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func NewShortenerHandler(service service.ShortenerService, auth auth.JwtAuthenticator, host string) *ShortenerHandler {
-	return &ShortenerHandler{Service: service, Auth: auth, Host: host}
-}
-
-func ShortenerRouter(handler ShortenerHandler) chi.Router {
+// Defines all handlers.
+func ShortenerRouter(handler ShortenerHandler, isProduction bool) chi.Router {
 	r := chi.NewRouter()
-	r.Use(logger.RequestLogger)
-	r.Use(gzip.GzipMiddleware)
-	r.Route("/", func(r chi.Router) {
-		r.Use(handler.Auth.CreateUserIfNeeded)
-		r.Post("/", handler.Generate)
-		r.Post("/api/shorten", handler.GenerateJSON)
-		r.Post("/api/shorten/batch", handler.GenerateBatch)
-		r.Get("/{url}", handler.Redirect)
-		r.Get("/ping", handler.Ping)
+	if !isProduction {
+		r.Mount("/debug", middleware.Profiler())
+	}
+
+	r.Group(func(r chi.Router) {
+		r.Use(logger.RequestLoggerMiddleware)
+		r.Use(gzip.GzipMiddleware)
+		r.Route("/", func(r chi.Router) {
+			r.Use(handler.Auth.CreateUserIfNeeded)
+			r.Post("/", handler.Generate)
+			r.Post("/api/shorten", handler.GenerateJSON)
+			r.Post("/api/shorten/batch", handler.GenerateBatch)
+			r.Get("/{url}", handler.Redirect)
+			r.Get("/ping", handler.Ping)
+			r.Get("/api/user/urls", handler.GetUserURLs)
+		})
+
+		r.With(handler.Auth.OnlyWithAuth).Delete("/api/user/urls", handler.DeleteUserURLs)
 	})
 
-	r.With(handler.Auth.OnlyWithAuth).Get("/api/user/urls", handler.GetUserURLs)
-	r.With(handler.Auth.OnlyWithAuth).Delete("/api/user/urls", handler.DeleteUserURLs)
 	return r
 }

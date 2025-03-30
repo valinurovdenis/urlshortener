@@ -1,4 +1,4 @@
-package urlstorage
+package urlstorage_test
 
 import (
 	"bufio"
@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/valinurovdenis/urlshortener/internal/app/mocks"
-	"github.com/valinurovdenis/urlshortener/internal/app/utils"
+	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
 )
 
 type Consumer struct {
@@ -33,13 +33,13 @@ func NewConsumer(filename string) (*Consumer, error) {
 	}, nil
 }
 
-func (c *Consumer) ReadDump() (*URLDump, error) {
+func (c *Consumer) ReadDump() (*urlstorage.URLDump, error) {
 	if !c.scanner.Scan() {
 		return nil, c.scanner.Err()
 	}
 	data := c.scanner.Bytes()
 
-	dump := URLDump{}
+	dump := urlstorage.URLDump{}
 	err := json.Unmarshal(data, &dump)
 	if err != nil {
 		return nil, err
@@ -63,7 +63,7 @@ func TestFileDumpWrapper_testDump(t *testing.T) {
 	mockStorage.On("StoreWithContext", mock.Anything, "http://youtube.ru/1", "1", "").Return(nil).Once()
 	mockStorage.On("StoreWithContext", mock.Anything, "http://youtube.ru/2", "2", "").Return(nil).Once()
 	{
-		dumpWrapper, _ := NewFileDumpWrapper(testFilename, mockStorage)
+		dumpWrapper, _ := urlstorage.NewFileDumpWrapper(testFilename, mockStorage)
 
 		dumpWrapper.StoreWithContext(context.Background(), "http://youtube.ru/1", "1", "")
 		dumpWrapper.StoreWithContext(context.Background(), "http://youtube.ru/2", "2", "")
@@ -77,7 +77,7 @@ func TestFileDumpWrapper_testDump(t *testing.T) {
 		for i := 1; i < num+1; i++ {
 			dump, err := consumer.ReadDump()
 			require.Equal(t, nil, err)
-			expectedDump := URLDump{
+			expectedDump := urlstorage.URLDump{
 				UUID:        int64(i),
 				OriginalURL: "http://youtube.ru/" + strconv.Itoa(i),
 				ShortURL:    strconv.Itoa(i)}
@@ -87,12 +87,12 @@ func TestFileDumpWrapper_testDump(t *testing.T) {
 	checkEqualDumps(2)
 
 	mockStorage.On("Clear").Return(nil).Once()
-	mockStorage.On("StoreManyWithContext", mock.Anything, []utils.URLPair{
+	mockStorage.On("StoreManyWithContext", mock.Anything, []urlstorage.URLPair{
 		{Long: "http://youtube.ru/1", Short: "1"},
 		{Long: "http://youtube.ru/2", Short: "2"}}, "").Return([]error{nil, nil}, nil).Once()
 	mockStorage.On("StoreWithContext", mock.Anything, "http://youtube.ru/3", "3", "").Return(nil).Once()
 	{
-		dumpWrapper, _ := NewFileDumpWrapper(testFilename, mockStorage)
+		dumpWrapper, _ := urlstorage.NewFileDumpWrapper(testFilename, mockStorage)
 
 		dumpWrapper.RestoreFromDump()
 		dumpWrapper.StoreWithContext(context.Background(), "http://youtube.ru/3", "3", "")

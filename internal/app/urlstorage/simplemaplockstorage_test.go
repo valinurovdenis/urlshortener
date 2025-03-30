@@ -1,4 +1,4 @@
-package urlstorage
+package urlstorage_test
 
 import (
 	"context"
@@ -7,16 +7,16 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/valinurovdenis/urlshortener/internal/app/utils"
+	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
 )
 
 func TestSimpleMapLockStorage_GetLongURL(t *testing.T) {
-	storage := SimpleMapLockStorage{
+	storage := urlstorage.SimpleMapLockStorage{
 		ShortURL2Url: map[string]string{"a": "url_a"},
 		URL2ShortURL: map[string]string{"url_a": "a"}}
 	tests := []struct {
 		name     string
-		s        *SimpleMapLockStorage
+		s        *urlstorage.SimpleMapLockStorage
 		shortURL string
 		want     string
 		wantErr  error
@@ -39,12 +39,12 @@ func TestSimpleMapLockStorage_GetLongURL(t *testing.T) {
 }
 
 func TestSimpleMapLockStorage_GetShortURL(t *testing.T) {
-	storage := SimpleMapLockStorage{
+	storage := urlstorage.SimpleMapLockStorage{
 		ShortURL2Url: map[string]string{"a": "url_a"},
 		URL2ShortURL: map[string]string{"url_a": "a"}}
 	tests := []struct {
 		name    string
-		s       *SimpleMapLockStorage
+		s       *urlstorage.SimpleMapLockStorage
 		longURL string
 		want    string
 		wantErr error
@@ -67,7 +67,7 @@ func TestSimpleMapLockStorage_GetShortURL(t *testing.T) {
 }
 
 func TestSimpleMapLockStorage_Store(t *testing.T) {
-	storage := SimpleMapLockStorage{
+	storage := urlstorage.SimpleMapLockStorage{
 		ShortURL2Url: map[string]string{"a": "url_a"},
 		URL2ShortURL: map[string]string{"url_a": "a"}}
 	tests := []struct {
@@ -76,7 +76,7 @@ func TestSimpleMapLockStorage_Store(t *testing.T) {
 		shortURL      string
 		expectedError error
 	}{
-		{name: "store_a", longURL: "url_a", shortURL: "a", expectedError: ErrConflictURL},
+		{name: "store_a", longURL: "url_a", shortURL: "a", expectedError: urlstorage.ErrConflictURL},
 		{name: "store_b", longURL: "url_b", shortURL: "b", expectedError: nil},
 		{name: "store_empty", longURL: "", shortURL: "", expectedError: errors.New("cannot save empty url")},
 	}
@@ -93,16 +93,16 @@ func TestSimpleMapLockStorage_Store(t *testing.T) {
 }
 
 func TestSimpleMapLockStorage_StoreMany(t *testing.T) {
-	storage := SimpleMapLockStorage{
+	storage := urlstorage.SimpleMapLockStorage{
 		ShortURL2Url: map[string]string{"a": "url_a"},
 		URL2ShortURL: map[string]string{"url_a": "a"}}
 	tests := []struct {
 		name          string
-		urlsToStore   []utils.URLPair
+		urlsToStore   []urlstorage.URLPair
 		expectedError error
 	}{
 		{name: "store_many",
-			urlsToStore: []utils.URLPair{
+			urlsToStore: []urlstorage.URLPair{
 				{Long: "url_a", Short: "a"},
 				{Long: "url_b", Short: "b"}},
 			expectedError: nil},
@@ -111,11 +111,26 @@ func TestSimpleMapLockStorage_StoreMany(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			errs, err := storage.StoreManyWithContext(context.Background(), tt.urlsToStore, "")
 			require.Equal(t, tt.expectedError, err)
-			assert.Equal(t, errs, []error{ErrConflictURL, nil})
+			assert.Equal(t, errs, []error{urlstorage.ErrConflictURL, nil})
 			assert.Equal(t, storage.URL2ShortURL,
 				map[string]string{"url_a": "a", "url_b": "b"})
 			assert.Subset(t, storage.ShortURL2Url,
 				map[string]string{"a": "url_a", "b": "url_b"})
 		})
 	}
+}
+
+func TestSimpleMapLockStorage_Clear(t *testing.T) {
+	storage := urlstorage.NewSimpleMapLockStorage()
+	storage.StoreManyWithContext(context.Background(), []urlstorage.URLPair{
+		{Long: "url_a", Short: "a"},
+		{Long: "url_b", Short: "b"}}, "")
+
+	err := storage.Clear()
+	require.Equal(t, nil, err)
+
+	assert.Equal(t, storage.URL2ShortURL,
+		map[string]string{})
+	assert.Equal(t, storage.ShortURL2Url,
+		map[string]string{})
 }
