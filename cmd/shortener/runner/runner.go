@@ -1,3 +1,4 @@
+// Package runner for running service with given config.
 package runner
 
 import (

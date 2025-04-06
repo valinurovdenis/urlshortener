@@ -79,9 +79,9 @@ func (s *DatabaseStorage) StoreWithContext(ctx context.Context, longURL string, 
 // Adds number of mappings longURL -> shortURL.
 func (s *DatabaseStorage) StoreManyWithContext(ctx context.Context, long2ShortUrls []URLPair, userID string) ([]error, error) {
 	var errs []error
-	tx, err := s.DB.Begin()
-	if err != nil {
-		return nil, err
+	tx, errDB := s.DB.Begin()
+	if errDB != nil {
+		return nil, errDB
 	}
 	defer tx.Rollback()
 
@@ -93,11 +93,11 @@ func (s *DatabaseStorage) StoreManyWithContext(ctx context.Context, long2ShortUr
 	defer stmt.Close()
 
 	for i := range long2ShortUrls {
-		res, err := stmt.ExecContext(ctx, userID, long2ShortUrls[i].Short, long2ShortUrls[i].Long)
+		res, errExec := stmt.ExecContext(ctx, userID, long2ShortUrls[i].Short, long2ShortUrls[i].Long)
 		if c, _ := res.RowsAffected(); c == 0 {
-			err = ErrConflictURL
+			errExec = ErrConflictURL
 		}
-		errs = append(errs, err)
+		errs = append(errs, errExec)
 	}
 	if err = tx.Commit(); err != nil {
 		return nil, err

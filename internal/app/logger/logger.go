@@ -1,4 +1,4 @@
-// Package for logging incoming requests.
+// Package logger for logging incoming requests.
 package logger
 
 import (
