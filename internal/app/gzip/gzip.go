@@ -1,4 +1,4 @@
-// Package for gzipping reqeusts and responses.
+// Package gzip for gzipping reqeusts and responses.
 package gzip
 
 import (

@@ -1,4 +1,4 @@
-// Package for auxiliary functions and structs.
+// Package utils for auxiliary functions and structs.
 package utils
 
 import "bytes"
