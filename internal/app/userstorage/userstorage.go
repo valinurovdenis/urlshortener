@@ -1,4 +1,4 @@
-// Storage for storing and generating user ids.
+// Package userstorage for storing and generating user ids.
 package userstorage
 
 import (

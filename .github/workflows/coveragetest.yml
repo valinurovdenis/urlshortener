@@ -1,4 +1,4 @@
-name: local tests
+name: coverage test
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
 
 jobs: 
   local_tests:
-    name: Local Tests
+    name: Coverage Tests
     runs-on: ubuntu-latest
     container: golang:1.23
     steps:

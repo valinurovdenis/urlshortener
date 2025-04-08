@@ -1,4 +1,4 @@
-// Package for authorization middlewares.
+// Package auth for authorization middlewares.
 package auth
 
 import (

@@ -1,14 +1,12 @@
-package urlstorage_test
+package urlstorage
 
 import (
 	"context"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
-
-	"github.com/DATA-DOG/go-sqlmock"
 )
 
 func TestDatabaseStorage_GetLongURL(t *testing.T) {
@@ -18,10 +16,10 @@ func TestDatabaseStorage_GetLongURL(t *testing.T) {
 	}
 	defer db.Close()
 
-	storage := urlstorage.NewDatabaseStorage(db)
+	storage := NewDatabaseStorage(db)
 	tests := []struct {
 		name     string
-		s        *urlstorage.DatabaseStorage
+		s        *DatabaseStorage
 		shortURL string
 		want     string
 		wantErr  bool
@@ -40,7 +38,7 @@ func TestDatabaseStorage_GetLongURL(t *testing.T) {
 			}
 			got, err := tt.s.GetLongURLWithContext(context.Background(), tt.shortURL)
 			if tt.deleted {
-				require.EqualError(t, err, urlstorage.ErrDeletedURL.Error())
+				require.EqualError(t, err, ErrDeletedURL.Error())
 			} else if !tt.wantErr {
 				require.NoError(t, err)
 			}
@@ -56,10 +54,10 @@ func TestDatabaseStorage_GetShortURL(t *testing.T) {
 	}
 	defer db.Close()
 
-	storage := urlstorage.NewDatabaseStorage(db)
+	storage := NewDatabaseStorage(db)
 	tests := []struct {
 		name    string
-		s       *urlstorage.DatabaseStorage
+		s       *DatabaseStorage
 		longURL string
 		want    string
 		wantErr bool
@@ -91,7 +89,7 @@ func TestDatabaseStorage_Store(t *testing.T) {
 	}
 	defer db.Close()
 
-	storage := urlstorage.NewDatabaseStorage(db)
+	storage := NewDatabaseStorage(db)
 	tests := []struct {
 		name          string
 		longURL       string
@@ -99,7 +97,7 @@ func TestDatabaseStorage_Store(t *testing.T) {
 		expectedError error
 	}{
 		{name: "store_b", longURL: "url_b", shortURL: "b", expectedError: nil},
-		{name: "store_empty", longURL: "", shortURL: "", expectedError: urlstorage.ErrEmptyLongURL},
+		{name: "store_empty", longURL: "", shortURL: "", expectedError: ErrEmptyLongURL},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -120,14 +118,14 @@ func TestDatabaseStorage_StoreMany(t *testing.T) {
 	}
 	defer db.Close()
 
-	storage := urlstorage.NewDatabaseStorage(db)
+	storage := NewDatabaseStorage(db)
 	tests := []struct {
 		name          string
-		urlsToStore   []urlstorage.URLPair
+		urlsToStore   []URLPair
 		expectedError error
 	}{
 		{name: "store_many",
-			urlsToStore: []urlstorage.URLPair{
+			urlsToStore: []URLPair{
 				{Long: "url_a", Short: "a"}},
 			expectedError: nil},
 	}
@@ -150,7 +148,7 @@ func TestDatabaseStorage_GetUserURLs(t *testing.T) {
 	}
 	defer db.Close()
 
-	storage := urlstorage.NewDatabaseStorage(db)
+	storage := NewDatabaseStorage(db)
 	tests := []struct {
 		name      string
 		user      string
@@ -169,7 +167,7 @@ func TestDatabaseStorage_GetUserURLs(t *testing.T) {
 			rows, err := storage.GetUserURLs(context.Background(), tt.user)
 			if !tt.wantError {
 				require.NoError(t, err)
-				require.Equal(t, []urlstorage.URLPair{{Long: "url_a", Short: "a"}}, rows)
+				require.Equal(t, []URLPair{{Long: "url_a", Short: "a"}}, rows)
 			}
 
 		})
@@ -185,7 +183,24 @@ func TestDatabaseStorage_DeleteUserURLs(t *testing.T) {
 	}
 	defer db.Close()
 
-	storage := urlstorage.NewDatabaseStorage(db)
+	storage := NewDatabaseStorage(db)
 	mock.ExpectExec("UPDATE shortener SET deleted=true").WillReturnResult(sqlmock.NewResult(1, 1))
-	storage.DeleteUserURLs(context.Background(), urlstorage.URLsForDelete{UserID: "user_1", ShortURLs: []string{"a", "b"}})
+	storage.DeleteUserURLs(context.Background(), URLsForDelete{UserID: "user_1", ShortURLs: []string{"a", "b"}})
+}
+
+func TestDatabaseStorage_init(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mock.ExpectBegin()
+	mock.ExpectExec("CREATE TABLE shortener").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("CREATE INDEX user_id_index").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("CREATE UNIQUE INDEX long_url_index").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	storage := NewDatabaseStorage(db)
+	storage.init()
 }
