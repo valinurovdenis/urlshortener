@@ -29,8 +29,24 @@ func SanitizeURL(origURL string) (string, error) {
 	return parsed.String(), nil
 }
 
+//go:generate mockery --name ShortenerService
+type ShortenerService interface {
+	// Generating short url.
+	GenerateShortURLWithContext(context context.Context, longURL string, userID string) (string, error)
+	// Get long url from short.
+	GetLongURLWithContext(context context.Context, shortURL string) (string, error)
+	// Generate short url in batch mode.
+	GenerateShortURLBatchWithContext(context context.Context, longURLs []string, userID string) ([]string, error)
+	// Returns all user urls.
+	GetUserURLs(context context.Context, userID string) ([]urlstorage.URLPair, error)
+	// Deletes all user urls.
+	DeleteUserURLs(ctx context.Context, userID string, shortURLs ...string) error
+	// Check whether service is alive.
+	Ping() error
+}
+
 // Facade for service datastorages and generators.
-type ShortenerService struct {
+type ShortenerServiceImpl struct {
 	URLStorage     urlstorage.URLStorage
 	UserURLStorage urlstorage.UserURLStorage
 	Generator      shortcutgenerator.ShortCutGenerator
@@ -39,9 +55,9 @@ type ShortenerService struct {
 }
 
 // New shortener service that facades storages and short url generator.
-func NewShortenerService(storage urlstorage.URLStorage, userStorage urlstorage.UserURLStorage, generator shortcutgenerator.ShortCutGenerator) *ShortenerService {
+func NewShortenerService(storage urlstorage.URLStorage, userStorage urlstorage.UserURLStorage, generator shortcutgenerator.ShortCutGenerator) *ShortenerServiceImpl {
 	ctx, stop := context.WithCancel(context.Background())
-	ret := &ShortenerService{
+	ret := &ShortenerServiceImpl{
 		URLStorage:     storage,
 		UserURLStorage: userStorage,
 		Generator:      generator,
@@ -53,7 +69,7 @@ func NewShortenerService(storage urlstorage.URLStorage, userStorage urlstorage.U
 }
 
 // Generates shortURL from longURL for given user.
-func (s *ShortenerService) GenerateShortURLWithContext(context context.Context, longURL string, userID string) (string, error) {
+func (s ShortenerServiceImpl) GenerateShortURLWithContext(context context.Context, longURL string, userID string) (string, error) {
 	longURL, err := SanitizeURL(longURL)
 	if err != nil {
 		return "", err
@@ -82,7 +98,7 @@ func (s *ShortenerService) GenerateShortURLWithContext(context context.Context, 
 var ErrDeletedURL = errors.New("conflict long url")
 
 // Gets longURL from shortURL.
-func (s *ShortenerService) GetLongURLWithContext(context context.Context, shortURL string) (string, error) {
+func (s ShortenerServiceImpl) GetLongURLWithContext(context context.Context, shortURL string) (string, error) {
 	longURL, err := s.URLStorage.GetLongURLWithContext(context, shortURL)
 	if errors.Is(err, urlstorage.ErrDeletedURL) {
 		return "", ErrDeletedURL
@@ -94,7 +110,7 @@ func (s *ShortenerService) GetLongURLWithContext(context context.Context, shortU
 }
 
 // Generates batch of shortURLs for user.
-func (s *ShortenerService) GenerateShortURLBatchWithContext(context context.Context, longURLs []string, userID string) ([]string, error) {
+func (s ShortenerServiceImpl) GenerateShortURLBatchWithContext(context context.Context, longURLs []string, userID string) ([]string, error) {
 	var shortURLs []string
 	var urls2Store []urlstorage.URLPair
 	for _, longURL := range longURLs {
@@ -129,7 +145,7 @@ func (s *ShortenerService) GenerateShortURLBatchWithContext(context context.Cont
 }
 
 // Deletes given user urls.
-func (s *ShortenerService) DeleteUserURLs(ctx context.Context, userID string, shortURLs ...string) error {
+func (s ShortenerServiceImpl) DeleteUserURLs(ctx context.Context, userID string, shortURLs ...string) error {
 	urls := urlstorage.URLsForDelete{UserID: userID, ShortURLs: shortURLs}
 	s.deleteChan <- urls
 	return nil
@@ -137,7 +153,7 @@ func (s *ShortenerService) DeleteUserURLs(ctx context.Context, userID string, sh
 
 // Collects urls for deleting.
 // Calls deleting function for collected urls every 10 seconds.
-func (s *ShortenerService) flushDeletedUserURLs(ctx context.Context) {
+func (s ShortenerServiceImpl) flushDeletedUserURLs(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Second)
 
 	var urlsByUser []urlstorage.URLsForDelete
@@ -163,11 +179,15 @@ func (s *ShortenerService) flushDeletedUserURLs(ctx context.Context) {
 }
 
 // Check whether service is alive.
-func (s *ShortenerService) Ping() error {
-	return s.URLStorage.Ping()
+func (s ShortenerServiceImpl) Ping() error {
+	err := s.UserURLStorage.Ping()
+	if err == nil {
+		return s.URLStorage.Ping()
+	}
+	return err
 }
 
 // Returns all user urls.
-func (s *ShortenerService) GetUserURLs(context context.Context, userID string) ([]urlstorage.URLPair, error) {
+func (s ShortenerServiceImpl) GetUserURLs(context context.Context, userID string) ([]urlstorage.URLPair, error) {
 	return s.UserURLStorage.GetUserURLs(context, userID)
 }

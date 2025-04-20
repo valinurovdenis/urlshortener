@@ -4,8 +4,10 @@ package runner
 import (
 	"database/sql"
 	"net/http"
+	"os"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/valinurovdenis/urlshortener/internal/app/auth"
 	"github.com/valinurovdenis/urlshortener/internal/app/handlers"
@@ -60,5 +62,22 @@ func Run() error {
 	auth := auth.NewAuthenticator(config.SecretKey, userStorage)
 	handler := handlers.NewShortenerHandler(*service, *auth, config.BaseURL+"/")
 	defer service.Stop()
-	return http.ListenAndServe(config.LocalURL, handlers.ShortenerRouter(*handler, config.IsProduction))
+
+	router := handlers.ShortenerRouter(*handler, config.IsProduction)
+	if config.EnableHTTPS {
+		dir, _ := os.Getwd()
+		mgr := autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			HostPolicy: autocert.HostWhitelist(config.BaseURL),
+			Cache:      autocert.DirCache(dir),
+		}
+		s := &http.Server{
+			Addr:      config.LocalURL,
+			Handler:   router,
+			TLSConfig: mgr.TLSConfig(),
+		}
+		return s.ListenAndServeTLS("", "")
+	}
+
+	return http.ListenAndServe(config.LocalURL, router)
 }
