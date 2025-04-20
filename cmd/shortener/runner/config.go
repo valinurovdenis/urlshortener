@@ -16,6 +16,7 @@ type Config struct {
 	FileStorage  string `env:"FILE_STORAGE_PATH"`
 	Database     string `env:"DATABASE_DSN"`
 	SecretKey    string `env:"SECRET_KEY"`
+	EnableHTTPS  bool   `env:"ENABLE_HTTPS"`
 	ShortLength  int
 	IsProduction bool
 }
@@ -29,6 +30,7 @@ func parseFlags(config *Config) {
 	flag.StringVar(&config.Database, "d", "", "database address")
 	flag.StringVar(&config.SecretKey, "k", "SECRET_KEY", "secret key")
 	flag.BoolVar(&config.IsProduction, "p", false, "is production")
+	flag.BoolVar(&config.EnableHTTPS, "s", false, "is https enabled")
 	flag.Parse()
 }
 
