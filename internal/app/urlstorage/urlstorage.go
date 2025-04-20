@@ -1,4 +1,4 @@
-// Package contains urls storage.
+// Package urlstorage contains urls storage.
 package urlstorage
 
 import (

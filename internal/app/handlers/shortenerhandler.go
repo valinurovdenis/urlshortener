@@ -1,4 +1,4 @@
-// Package contains service handlers for chi router.
+// Package handlers contains service handlers for chi router.
 package handlers
 
 import (
@@ -13,6 +13,7 @@ import (
 	"github.com/valinurovdenis/urlshortener/internal/app/gzip"
 	"github.com/valinurovdenis/urlshortener/internal/app/logger"
 	"github.com/valinurovdenis/urlshortener/internal/app/service"
+	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
 	"github.com/valinurovdenis/urlshortener/internal/app/utils"
 )
 
@@ -56,7 +57,7 @@ func (h *ShortenerHandler) Generate(w http.ResponseWriter, r *http.Request) {
 
 	if err == nil {
 		w.WriteHeader(http.StatusCreated)
-	} else if errors.Is(err, service.ErrConflictURL) {
+	} else if errors.Is(err, urlstorage.ErrConflictURL) {
 		w.WriteHeader(http.StatusConflict)
 	} else {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -93,7 +94,7 @@ func (h *ShortenerHandler) GenerateJSON(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	if err == nil {
 		w.WriteHeader(http.StatusCreated)
-	} else if errors.Is(err, service.ErrConflictURL) {
+	} else if errors.Is(err, urlstorage.ErrConflictURL) {
 		w.WriteHeader(http.StatusConflict)
 	} else {
 		http.Error(w, err.Error(), http.StatusBadRequest)

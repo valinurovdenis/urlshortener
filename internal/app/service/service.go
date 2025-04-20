@@ -1,4 +1,4 @@
-// Main shortener processing service.
+// Package service contains main shortener processing service.
 package service
 
 import (
@@ -14,7 +14,8 @@ import (
 	"go.uber.org/zap"
 )
 
-func sanitizeURL(origURL string) (string, error) {
+// Sanitizes url to fixed form.
+func SanitizeURL(origURL string) (string, error) {
 	if origURL == "" {
 		return "", errors.New("empty string is not url")
 	}
@@ -51,12 +52,9 @@ func NewShortenerService(storage urlstorage.URLStorage, userStorage urlstorage.U
 	return ret
 }
 
-// Error in case of long url is already saved.
-var ErrConflictURL = errors.New("conflict long url")
-
 // Generates shortURL from longURL for given user.
 func (s *ShortenerService) GenerateShortURLWithContext(context context.Context, longURL string, userID string) (string, error) {
-	longURL, err := sanitizeURL(longURL)
+	longURL, err := SanitizeURL(longURL)
 	if err != nil {
 		return "", err
 	}
@@ -67,9 +65,9 @@ func (s *ShortenerService) GenerateShortURLWithContext(context context.Context, 
 	}
 	err = s.URLStorage.StoreWithContext(context, longURL, shortURL, userID)
 	if errors.Is(err, urlstorage.ErrConflictURL) {
-		shortURL, err := s.URLStorage.GetShortURLWithContext(context, longURL)
-		if err == nil {
-			return shortURL, ErrConflictURL
+		existingShortURL, errGet := s.URLStorage.GetShortURLWithContext(context, longURL)
+		if errGet == nil {
+			return existingShortURL, urlstorage.ErrConflictURL
 		}
 	}
 
@@ -100,7 +98,7 @@ func (s *ShortenerService) GenerateShortURLBatchWithContext(context context.Cont
 	var shortURLs []string
 	var urls2Store []urlstorage.URLPair
 	for _, longURL := range longURLs {
-		longURL, err := sanitizeURL(longURL)
+		sanitizedLongURL, err := SanitizeURL(longURL)
 		if err != nil {
 			return []string{}, err
 		}
@@ -109,7 +107,7 @@ func (s *ShortenerService) GenerateShortURLBatchWithContext(context context.Cont
 		if err != nil {
 			return nil, errors.New("cannot generate new short url")
 		}
-		userURL := urlstorage.URLPair{Short: shortURL, Long: longURL}
+		userURL := urlstorage.URLPair{Short: shortURL, Long: sanitizedLongURL}
 		urls2Store = append(urls2Store, userURL)
 		shortURLs = append(shortURLs, shortURL)
 	}
