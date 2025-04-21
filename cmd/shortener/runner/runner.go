@@ -20,9 +20,7 @@ import (
 
 // Runs shortener service with given config.
 func Run() error {
-	config := new(Config)
-	parseFlags(config)
-	config.updateFromEnv()
+	config := GetConfig()
 
 	if err := logger.Initialize(config.LogLevel); err != nil {
 		return err
