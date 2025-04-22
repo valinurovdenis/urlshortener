@@ -3,7 +3,6 @@ package urlstorage
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"time"
 
 	"github.com/jackc/pgerrcode"
@@ -158,7 +157,13 @@ func (s *DatabaseStorage) DeleteUserURLs(ctx context.Context, urlsByUser ...URLs
 
 // Clear all mappings.
 func (s *DatabaseStorage) Clear() error {
-	return errors.New("not implemented")
+	tx, err := s.DB.BeginTx(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	tx.Exec(`delete * from shortener`)
+	return tx.Commit()
 }
 
 // Storage contains urls saved and deleted by user.

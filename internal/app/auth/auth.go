@@ -35,7 +35,7 @@ func NewAuthenticator(secretKey string, userStorage userstorage.UserStorage) *Jw
 }
 
 // Builds jwt string from given user id.
-func (a *JwtAuthenticator) buildJWTString(userID int64) (string, error) {
+func (a *JwtAuthenticator) BuildJWTString(userID int64) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenExpiration)),
@@ -53,7 +53,7 @@ func (a *JwtAuthenticator) buildJWTString(userID int64) (string, error) {
 
 // Parses user id from jwt token string.
 // Returns error if no jwt token is not valid.
-func (a *JwtAuthenticator) getUserID(tokenString string) (int64, error) {
+func (a *JwtAuthenticator) GetUserID(tokenString string) (int64, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims,
 		func(t *jwt.Token) (interface{}, error) {
@@ -81,12 +81,12 @@ func (a *JwtAuthenticator) CreateUserIfNeeded(h http.Handler) http.Handler {
 		cookie, err := r.Cookie("Authorization")
 		var userID int64
 		if err == nil {
-			userID, err = a.getUserID(cookie.Value)
+			userID, err = a.GetUserID(cookie.Value)
 		}
 
 		if err != nil {
 			userID, _ = a.UserStorage.GenerateUUID(r.Context())
-			token, _ := a.buildJWTString(userID)
+			token, _ := a.BuildJWTString(userID)
 			newCookie := http.Cookie{Name: "Authorization", Value: token}
 			http.SetCookie(w, &newCookie)
 		}
@@ -104,7 +104,7 @@ func (a *JwtAuthenticator) OnlyWithAuth(h http.Handler) http.Handler {
 		cookie, err := r.Cookie("Authorization")
 		var userID int64
 		if err == nil {
-			userID, err = a.getUserID(cookie.Value)
+			userID, err = a.GetUserID(cookie.Value)
 		}
 
 		if err != nil {

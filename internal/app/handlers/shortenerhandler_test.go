@@ -268,11 +268,10 @@ func TestShortenerHandler_ServeHTTPBadRequest(t *testing.T) {
 	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
 	defer ts.Close()
 	testCases := []struct {
-		name         string
-		url          string
-		method       string
-		contentType  string
-		expectedCode int
+		name        string
+		url         string
+		method      string
+		contentType string
 	}{
 		{name: "method delete", url: "/asdf", method: http.MethodDelete, contentType: "text/plain"},
 		{name: "method put", url: "/qwer", method: http.MethodPut, contentType: "text/plain"},
@@ -286,4 +285,146 @@ func TestShortenerHandler_ServeHTTPBadRequest(t *testing.T) {
 			assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode, "Код ответа не совпадает с ожидаемым")
 		})
 	}
+}
+
+func TestShortenerHandler_CheckUnauthorized(t *testing.T) {
+	mockStorage := mocks.NewURLStorage(t)
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	userStorage := mocks.NewUserStorage(t)
+	auth := auth.NewAuthenticator("SECRET_KEY", userStorage)
+	mockUserStorage := mocks.NewUserURLStorage(t)
+	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/")
+	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
+	defer ts.Close()
+
+	resp, _ := testRequest(t, ts, http.MethodDelete, "/api/user/urls", nil, nil)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "Код ответа не совпадает с ожидаемым")
+}
+
+func TestShortenerHandler_CheckNewUserCreated(t *testing.T) {
+	mockStorage := mocks.NewURLStorage(t)
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	userStorage := mocks.NewUserStorage(t)
+	userStorage.On("GenerateUUID", mock.Anything).Return(int64(1), nil).Once()
+	auth := auth.NewAuthenticator("SECRET_KEY", userStorage)
+	mockUserStorage := mocks.NewUserURLStorage(t)
+	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/")
+	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
+	defer ts.Close()
+
+	respCreatedUser, _ := testRequest(t, ts, http.MethodPost, "/", nil, nil)
+	defer respCreatedUser.Body.Close()
+	resp, _ := testRequest(t, ts, http.MethodDelete, "/api/user/urls", nil,
+		map[string]string{"Cookie": respCreatedUser.Header.Get("Set-Cookie")})
+	defer resp.Body.Close()
+	assert.NotEqual(t, http.StatusUnauthorized, resp.StatusCode, "Код ответа не совпадает с ожидаемым")
+}
+
+func TestShortenerHandler_GetUserURLs(t *testing.T) {
+	mockStorage := mocks.NewURLStorage(t)
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	userStorage := mocks.NewUserStorage(t)
+	userStorage.On("GenerateUUID", mock.Anything).Return(int64(1), nil).Twice()
+	auth := auth.NewAuthenticator("SECRET_KEY", userStorage)
+	mockUserStorage := mocks.NewUserURLStorage(t)
+	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
+	emptyUrls := []urlstorage.URLPair{}
+	notEmptyURLs := []urlstorage.URLPair{{Short: "short", Long: "long"}}
+	mockUserStorage.On("GetUserURLs", mock.Anything, "1").Return(emptyUrls, nil).Once()
+	mockUserStorage.On("GetUserURLs", mock.Anything, "1").Return(notEmptyURLs, nil).Once()
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/")
+	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
+	defer ts.Close()
+
+	tests := []struct {
+		name string
+		user string
+		want []handlers.UserURL
+	}{
+		{name: "empty", want: nil},
+		{name: "not_empty", want: []handlers.UserURL{{ShortURL: "host/short", LongURL: "long"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/user/urls", nil)
+			resp, err := ts.Client().Do(req)
+			if err == nil {
+				defer resp.Body.Close()
+			}
+			var res []handlers.UserURL
+			json.NewDecoder(resp.Body).Decode(&res)
+			require.Equal(t, tt.want, res)
+		})
+	}
+}
+
+func TestShortenerHandler_Ping(t *testing.T) {
+	mockStorage := mocks.NewURLStorage(t)
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	userStorage := mocks.NewUserStorage(t)
+	userStorage.On("GenerateUUID", mock.Anything).Return(int64(1), nil).Times(2)
+	auth := auth.NewAuthenticator("SECRET_KEY", userStorage)
+	mockUserStorage := mocks.NewUserURLStorage(t)
+	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/")
+	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
+	defer ts.Close()
+
+	tests := []struct {
+		name    string
+		wantErr bool
+	}{
+		{name: "no error ping", wantErr: false},
+		{name: "error ping", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.wantErr {
+				mockStorage.On("Ping").Return(errors.New("error")).Once()
+				mockUserStorage.On("Ping").Return(nil).Once()
+			} else {
+				mockStorage.On("Ping").Return(nil).Once()
+				mockUserStorage.On("Ping").Return(nil).Once()
+			}
+			req, _ := http.NewRequest(http.MethodGet, ts.URL+"/ping", nil)
+			resp, err := ts.Client().Do(req)
+			if err == nil {
+				defer resp.Body.Close()
+			}
+			if tt.wantErr {
+				require.Equal(t, resp.StatusCode, http.StatusInternalServerError)
+			} else {
+				require.Equal(t, resp.StatusCode, http.StatusOK)
+			}
+		})
+	}
+}
+
+func TestShortenerHandler_GenerateBatch(t *testing.T) {
+	mockStorage := mocks.NewURLStorage(t)
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	mockGenerator.On("Generate").Return("short", nil).Times(2)
+	userStorage := mocks.NewUserStorage(t)
+	userStorage.On("GenerateUUID", mock.Anything).Return(int64(1), nil).Once()
+	auth := auth.NewAuthenticator("SECRET_KEY", userStorage)
+	mockUserStorage := mocks.NewUserURLStorage(t)
+	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
+	mockStorage.On("StoreManyWithContext", mock.Anything, mock.Anything, mock.Anything).Return([]error{nil, nil}, nil).Once()
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/")
+	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
+	defer ts.Close()
+
+	var input bytes.Buffer
+	json.NewEncoder(&input).Encode([]handlers.InputBatch{{URL: "long1", ID: "1"}, {URL: "long2", ID: "2"}})
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/shorten/batch", &input)
+	resp, err := ts.Client().Do(req)
+	if err == nil {
+		defer resp.Body.Close()
+	}
+	var res []handlers.ResultBatch
+	json.NewDecoder(resp.Body).Decode(&res)
+	require.Equal(t, []handlers.ResultBatch{{URL: "host/short", ID: "1"}, {URL: "host/short", ID: "2"}}, res)
 }
