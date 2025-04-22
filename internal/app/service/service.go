@@ -52,6 +52,7 @@ type ShortenerServiceImpl struct {
 	Generator      shortcutgenerator.ShortCutGenerator
 	deleteChan     chan urlstorage.URLsForDelete
 	Stop           func()
+	Stopped        chan struct{}
 }
 
 // New shortener service that facades storages and short url generator.
@@ -63,8 +64,9 @@ func NewShortenerService(storage urlstorage.URLStorage, userStorage urlstorage.U
 		Generator:      generator,
 		deleteChan:     make(chan urlstorage.URLsForDelete, 1024),
 		Stop:           stop,
+		Stopped:        make(chan struct{}, 1),
 	}
-	go ret.flushDeletedUserURLs(ctx)
+	go ret.FlushDeletedUserURLs(ctx)
 	return ret
 }
 
@@ -153,7 +155,7 @@ func (s ShortenerServiceImpl) DeleteUserURLs(ctx context.Context, userID string,
 
 // Collects urls for deleting.
 // Calls deleting function for collected urls every 10 seconds.
-func (s ShortenerServiceImpl) flushDeletedUserURLs(ctx context.Context) {
+func (s ShortenerServiceImpl) FlushDeletedUserURLs(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Second)
 
 	var urlsByUser []urlstorage.URLsForDelete
@@ -161,6 +163,13 @@ func (s ShortenerServiceImpl) flushDeletedUserURLs(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			fmt.Println("done")
+			if len(urlsByUser) != 0 {
+				if err := s.UserURLStorage.DeleteUserURLs(context.TODO(), urlsByUser...); err != nil {
+					logger.Log.Error("cannot delete urls", zap.Error(err))
+				}
+			}
+			close(s.Stopped)
 			return
 		case urls := <-s.deleteChan:
 			urlsByUser = append(urlsByUser, urls)

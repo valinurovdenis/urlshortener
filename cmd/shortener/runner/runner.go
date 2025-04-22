@@ -2,7 +2,9 @@
 package runner
 
 import (
+	"context"
 	"database/sql"
+	"log"
 	"net/http"
 	"os"
 
@@ -19,7 +21,7 @@ import (
 )
 
 // Runs shortener service with given config.
-func Run() error {
+func Run(ctx context.Context, stopped chan struct{}) error {
 	config := GetConfig()
 
 	if err := logger.Initialize(config.LogLevel); err != nil {
@@ -59,9 +61,9 @@ func Run() error {
 	service := service.NewShortenerService(urlStorage, userURLStorage, generator)
 	auth := auth.NewAuthenticator(config.SecretKey, userStorage)
 	handler := handlers.NewShortenerHandler(*service, *auth, config.BaseURL+"/")
-	defer service.Stop()
 
 	router := handlers.ShortenerRouter(*handler, config.IsProduction)
+	var srv *http.Server
 	if config.EnableHTTPS {
 		dir, _ := os.Getwd()
 		mgr := autocert.Manager{
@@ -69,13 +71,30 @@ func Run() error {
 			HostPolicy: autocert.HostWhitelist(config.BaseURL),
 			Cache:      autocert.DirCache(dir),
 		}
-		s := &http.Server{
+		srv = &http.Server{
 			Addr:      config.LocalURL,
 			Handler:   router,
 			TLSConfig: mgr.TLSConfig(),
 		}
-		return s.ListenAndServeTLS("", "")
+	} else {
+		srv = &http.Server{
+			Addr:    config.LocalURL,
+			Handler: router,
+		}
 	}
 
-	return http.ListenAndServe(config.LocalURL, router)
+	go func() {
+		<-ctx.Done()
+		if err := srv.Shutdown(context.Background()); err != nil {
+			log.Printf("Error when shutdown server: %v", err)
+		}
+		service.Stop()
+		<-service.Stopped
+		close(stopped)
+	}()
+
+	if config.EnableHTTPS {
+		return srv.ListenAndServeTLS("", "")
+	}
+	return srv.ListenAndServe()
 }

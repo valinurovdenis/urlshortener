@@ -1,7 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"net/http"
+	"os/signal"
+	"syscall"
 
 	"github.com/valinurovdenis/urlshortener/cmd/shortener/runner"
 )
@@ -17,7 +21,12 @@ func main() {
 	fmt.Printf("Build date: %s\n", buildDate)
 	fmt.Printf("Build commit: %s\n", buildCommit)
 
-	if err := runner.Run(); err != nil {
+	stopped := make(chan struct{}, 1)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	defer stop()
+	if err := runner.Run(ctx, stopped); err != http.ErrServerClosed {
 		panic(err)
 	}
+	<-stopped
+	fmt.Println("Server Shutdown gracefully")
 }

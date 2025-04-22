@@ -167,3 +167,19 @@ func TestShortenerService_GenerateShortURLBatchWithContext(t *testing.T) {
 		})
 	}
 }
+
+func TestShortenerServiceImpl_FlushDeletedUserURLs(t *testing.T) {
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	mockStorage := mocks.NewURLStorage(t)
+	mockUserStorage := mocks.NewUserURLStorage(t)
+	mockUserStorage.On("DeleteUserURLs", mock.Anything,
+		urlstorage.URLsForDelete{UserID: "user_1", ShortURLs: []string{"short"}}).Return(nil).Once()
+	service := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
+
+	err := service.DeleteUserURLs(context.Background(), "user_1", "short")
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	service.FlushDeletedUserURLs(ctx)
+}

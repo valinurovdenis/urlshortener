@@ -2,11 +2,14 @@ package runner_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/valinurovdenis/urlshortener/cmd/shortener/runner"
@@ -22,8 +25,11 @@ type resultURL struct {
 
 // Example of shortener service usage.
 func Example() {
-	// Run service on 8080 port and wait some time.
-	go runner.Run()
+	// Runs service on 8080 port and wait some time.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	defer stop()
+	stopped := make(chan struct{}, 1)
+	go runner.Run(ctx, stopped)
 	time.Sleep(100 * time.Millisecond)
 
 	// Client for sending requests to service.
