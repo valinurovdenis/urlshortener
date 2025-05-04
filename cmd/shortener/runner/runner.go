@@ -2,10 +2,14 @@
 package runner
 
 import (
+	"context"
 	"database/sql"
+	"log"
 	"net/http"
+	"os"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/valinurovdenis/urlshortener/internal/app/auth"
 	"github.com/valinurovdenis/urlshortener/internal/app/handlers"
@@ -17,10 +21,8 @@ import (
 )
 
 // Runs shortener service with given config.
-func Run() error {
-	config := new(Config)
-	parseFlags(config)
-	config.updateFromEnv()
+func Run(ctx context.Context, stopped chan struct{}) error {
+	config := GetConfig()
 
 	if err := logger.Initialize(config.LogLevel); err != nil {
 		return err
@@ -59,6 +61,40 @@ func Run() error {
 	service := service.NewShortenerService(urlStorage, userURLStorage, generator)
 	auth := auth.NewAuthenticator(config.SecretKey, userStorage)
 	handler := handlers.NewShortenerHandler(*service, *auth, config.BaseURL+"/")
-	defer service.Stop()
-	return http.ListenAndServe(config.LocalURL, handlers.ShortenerRouter(*handler, config.IsProduction))
+
+	router := handlers.ShortenerRouter(*handler, config.IsProduction)
+	var srv *http.Server
+	if config.EnableHTTPS {
+		dir, _ := os.Getwd()
+		mgr := autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			HostPolicy: autocert.HostWhitelist(config.BaseURL),
+			Cache:      autocert.DirCache(dir),
+		}
+		srv = &http.Server{
+			Addr:      config.LocalURL,
+			Handler:   router,
+			TLSConfig: mgr.TLSConfig(),
+		}
+	} else {
+		srv = &http.Server{
+			Addr:    config.LocalURL,
+			Handler: router,
+		}
+	}
+
+	go func() {
+		<-ctx.Done()
+		if err := srv.Shutdown(context.Background()); err != nil {
+			log.Printf("Error when shutdown server: %v", err)
+		}
+		service.Stop()
+		<-service.Stopped
+		close(stopped)
+	}()
+
+	if config.EnableHTTPS {
+		return srv.ListenAndServeTLS("", "")
+	}
+	return srv.ListenAndServe()
 }

@@ -94,3 +94,92 @@ func TestShortenerService_GetShortURL(t *testing.T) {
 		})
 	}
 }
+
+func TestShortenerService_GetUserURLs(t *testing.T) {
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	mockStorage := mocks.NewURLStorage(t)
+	mockUserStorage := mocks.NewUserURLStorage(t)
+	emptyUrls := []urlstorage.URLPair{}
+	notEmptyURLs := []urlstorage.URLPair{{Short: "short", Long: "long"}}
+	mockUserStorage.On("GetUserURLs", mock.Anything, "user_1").Return(emptyUrls, nil).Once()
+	mockUserStorage.On("GetUserURLs", mock.Anything, "user_2").Return(notEmptyURLs, nil).Once()
+	service := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
+	tests := []struct {
+		name string
+		user string
+		want []urlstorage.URLPair
+	}{
+		{name: "empty", user: "user_1", want: emptyUrls},
+		{name: "not_empty", user: "user_2", want: notEmptyURLs},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rows, err := service.GetUserURLs(context.Background(), tt.user)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, rows)
+		})
+	}
+}
+
+func TestShortenerService_DeleteUserURLs(t *testing.T) {
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	mockStorage := mocks.NewURLStorage(t)
+	mockUserStorage := mocks.NewUserURLStorage(t)
+	service := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
+	err := service.DeleteUserURLs(context.Background(), "user_1")
+	require.NoError(t, err)
+}
+
+func TestShortenerService_Ping(t *testing.T) {
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	mockStorage := mocks.NewURLStorage(t)
+	mockStorage.On("Ping").Return(nil).Once()
+	mockUserStorage := mocks.NewUserURLStorage(t)
+	mockUserStorage.On("Ping").Return(nil).Once()
+	service := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
+	err := service.Ping()
+	require.NoError(t, err)
+}
+
+func TestShortenerService_GenerateShortURLBatchWithContext(t *testing.T) {
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	mockGenerator.On("Generate").Return("short", nil).Times(4)
+	mockStorage := mocks.NewURLStorage(t)
+	mockStorage.On("GetShortURLWithContext", mock.Anything, "long").Return("old_short", nil).Once()
+	mockUserStorage := mocks.NewUserURLStorage(t)
+	service := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
+
+	tests := []struct {
+		name string
+		user string
+		errs []error
+		want []string
+	}{
+		{name: "all_new", user: "user_1", errs: []error{nil, nil}, want: []string{"short", "short"}},
+		{name: "some_existed", user: "user_2", errs: []error{nil, errors.New("some error")}, want: []string{"short", "old_short"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockStorage.On("StoreManyWithContext", mock.Anything, mock.Anything, "user_1").Return(tt.errs, nil).Once()
+			res, err := service.GenerateShortURLBatchWithContext(context.Background(), []string{"long", "long"}, "user_1")
+			require.NoError(t, err)
+			require.Equal(t, tt.want, res)
+		})
+	}
+}
+
+func TestShortenerServiceImpl_FlushDeletedUserURLs(t *testing.T) {
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	mockStorage := mocks.NewURLStorage(t)
+	mockUserStorage := mocks.NewUserURLStorage(t)
+	mockUserStorage.On("DeleteUserURLs", mock.Anything,
+		urlstorage.URLsForDelete{UserID: "user_1", ShortURLs: []string{"short"}}).Return(nil).Once()
+	service := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
+
+	err := service.DeleteUserURLs(context.Background(), "user_1", "short")
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	service.FlushDeletedUserURLs(ctx)
+}

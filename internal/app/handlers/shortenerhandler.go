@@ -105,13 +105,13 @@ func (h *ShortenerHandler) GenerateJSON(w http.ResponseWriter, r *http.Request) 
 }
 
 // Input type for generating batch.
-type inputBatch struct {
+type InputBatch struct {
 	URL string `json:"original_url"`
 	ID  string `json:"correlation_id"`
 }
 
 // Output type for generating batch.
-type resultBatch struct {
+type ResultBatch struct {
 	URL string `json:"short_url"`
 	ID  string `json:"correlation_id"`
 }
@@ -119,8 +119,8 @@ type resultBatch struct {
 // Handler for generating long urls in batch mode.
 func (h *ShortenerHandler) GenerateBatch(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("user_id")
-	var input []inputBatch
-	var result []resultBatch
+	var input []InputBatch
+	var result []ResultBatch
 	var longURLs []string
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -137,7 +137,7 @@ func (h *ShortenerHandler) GenerateBatch(w http.ResponseWriter, r *http.Request)
 	}
 	for i, shortURL := range shortURLs {
 		if shortURL != "" {
-			result = append(result, resultBatch{ID: input[i].ID, URL: h.Host + shortURL})
+			result = append(result, ResultBatch{ID: input[i].ID, URL: h.Host + shortURL})
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")

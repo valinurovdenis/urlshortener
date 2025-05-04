@@ -134,3 +134,23 @@ func TestSimpleMapLockStorage_Clear(t *testing.T) {
 	assert.Equal(t, storage.ShortURL2Url,
 		map[string]string{})
 }
+
+func TestSimpleMapLockStorage_Ping(t *testing.T) {
+	storage := urlstorage.NewSimpleMapLockStorage()
+	err := storage.Ping()
+	require.NoError(t, err)
+}
+
+func TestSimpleMapLockStorage_GetUserURLs(t *testing.T) {
+	storage := urlstorage.NewSimpleMapLockStorage()
+	_, err := storage.GetUserURLs(context.Background(), "user_1")
+	// TODO: write tests
+	require.Error(t, err)
+}
+
+func TestSimpleMapLockStorage_DeleteUserURLs(t *testing.T) {
+	storage := urlstorage.NewSimpleMapLockStorage()
+	err := storage.DeleteUserURLs(context.Background(), urlstorage.URLsForDelete{UserID: "user", ShortURLs: []string{"short1", "short2"}})
+	// TODO: write tests
+	require.Error(t, err)
+}
