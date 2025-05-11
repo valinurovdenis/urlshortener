@@ -3,7 +3,7 @@ package urlstorage
 import (
 	"context"
 	"database/sql"
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgerrcode"
@@ -43,7 +43,7 @@ func (s *DatabaseStorage) GetLongURLWithContext(ctx context.Context, shortURL st
 	var deleted bool
 	err := row.Scan(&longURL, &deleted)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to scan rows: %w", err)
 	}
 	if deleted {
 		return "", ErrDeletedURL
@@ -58,7 +58,7 @@ func (s *DatabaseStorage) GetShortURLWithContext(ctx context.Context, longURL st
 	var shortURL string
 	err := row.Scan(&shortURL)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to scan rows: %w", err)
 	}
 	return shortURL, nil
 }
@@ -81,14 +81,14 @@ func (s *DatabaseStorage) StoreManyWithContext(ctx context.Context, long2ShortUr
 	var errs []error
 	tx, errDB := s.DB.Begin()
 	if errDB != nil {
-		return nil, errDB
+		return nil, fmt.Errorf("failed to begin transaction: %w", errDB)
 	}
 	defer tx.Rollback()
 
 	stmt, err := tx.PrepareContext(ctx,
 		"INSERT INTO shortener (user_id, short_url, long_url) VALUES($1, $2, $3) ON CONFLICT do nothing")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to insert rows: %w", err)
 	}
 	defer stmt.Close()
 
@@ -100,7 +100,7 @@ func (s *DatabaseStorage) StoreManyWithContext(ctx context.Context, long2ShortUr
 		errs = append(errs, errExec)
 	}
 	if err = tx.Commit(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 	return errs, nil
 }
@@ -111,10 +111,10 @@ func (s *DatabaseStorage) GetUserURLs(ctx context.Context, userID string) ([]URL
 	rows, err := s.DB.QueryContext(ctx,
 		"SELECT short_url, long_url FROM shortener WHERE user_id = $1", userID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to begin select query: %w", err)
 	}
 	if rows.Err() != nil {
-		return nil, rows.Err()
+		return nil, fmt.Errorf("failed to get rows: %w", rows.Err())
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -137,7 +137,7 @@ func (s *DatabaseStorage) DeleteUserURLs(ctx context.Context, urlsByUser ...URLs
 
 	tx, err := s.DB.Begin()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -158,7 +158,13 @@ func (s *DatabaseStorage) DeleteUserURLs(ctx context.Context, urlsByUser ...URLs
 
 // Clear all mappings.
 func (s *DatabaseStorage) Clear() error {
-	return errors.New("not implemented")
+	tx, err := s.DB.BeginTx(context.Background(), nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transcation: %w", err)
+	}
+	defer tx.Rollback()
+	tx.Exec(`delete * from shortener`)
+	return tx.Commit()
 }
 
 // Storage contains urls saved and deleted by user.
