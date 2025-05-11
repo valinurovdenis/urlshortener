@@ -12,15 +12,16 @@ import (
 //
 // Settings read both from env and from args.
 type Config struct {
-	LocalURL     string `env:"SERVER_ADDRESS" json:"server_address"`
-	BaseURL      string `env:"BASE_URL" json:"base_url"`
-	LogLevel     string `env:"LOG_LEVEL"`
-	FileStorage  string `env:"FILE_STORAGE_PATH" json:"file_storage_path"`
-	Database     string `env:"DATABASE_DSN" json:"database_dsn"`
-	SecretKey    string `env:"SECRET_KEY"`
-	EnableHTTPS  bool   `env:"ENABLE_HTTPS" json:"enable_https"`
-	ShortLength  int
-	IsProduction bool
+	LocalURL      string `env:"SERVER_ADDRESS" json:"server_address"`
+	BaseURL       string `env:"BASE_URL" json:"base_url"`
+	LogLevel      string `env:"LOG_LEVEL"`
+	FileStorage   string `env:"FILE_STORAGE_PATH" json:"file_storage_path"`
+	Database      string `env:"DATABASE_DSN" json:"database_dsn"`
+	SecretKey     string `env:"SECRET_KEY"`
+	EnableHTTPS   bool   `env:"ENABLE_HTTPS" json:"enable_https"`
+	TrustedSubnet string `env:"TRUSTED_SUBNET" json:"trusted_subnet"`
+	ShortLength   int
+	IsProduction  bool
 }
 
 // Default config values.
@@ -47,6 +48,7 @@ func parseFlags(config *Config) {
 	flag.StringVar(&config.SecretKey, "k", defaultConfig.SecretKey, "secret key")
 	flag.BoolVar(&config.IsProduction, "p", defaultConfig.IsProduction, "is production")
 	flag.BoolVar(&config.EnableHTTPS, "s", defaultConfig.EnableHTTPS, "is https enabled")
+	flag.StringVar(&config.TrustedSubnet, "t", defaultConfig.TrustedSubnet, "is https enabled")
 	flag.Parse()
 }
 

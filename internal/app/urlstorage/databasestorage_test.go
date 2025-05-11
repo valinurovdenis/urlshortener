@@ -2,6 +2,7 @@ package urlstorage
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -184,8 +185,39 @@ func TestDatabaseStorage_DeleteUserURLs(t *testing.T) {
 	defer db.Close()
 
 	storage := NewDatabaseStorage(db)
+	urlsForDelete := URLsForDelete{UserID: "user_1", ShortURLs: []string{"a", "b"}}
+
+	// OK
+	mock.ExpectBegin()
+	mock.ExpectPrepare("UPDATE")
 	mock.ExpectExec("UPDATE shortener SET deleted=true").WillReturnResult(sqlmock.NewResult(1, 1))
-	storage.DeleteUserURLs(context.Background(), URLsForDelete{UserID: "user_1", ShortURLs: []string{"a", "b"}})
+	mock.ExpectCommit()
+	err = storage.DeleteUserURLs(context.Background(), urlsForDelete)
+	require.NoError(t, err)
+
+	// Error in commit
+	mock.ExpectBegin().WillReturnError(fmt.Errorf("some strange error"))
+	err = storage.DeleteUserURLs(context.Background(), urlsForDelete)
+	require.Error(t, err)
+
+	// Error in prepare
+	mock.ExpectPrepare("update").WillReturnError(fmt.Errorf("some strange error"))
+	err = storage.DeleteUserURLs(context.Background(), urlsForDelete)
+	require.Error(t, err)
+}
+
+func TestDatabaseStorage_GetStats(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	storage := NewDatabaseStorage(db)
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"userCount", "urlCount"}).AddRow(5, 3))
+	res, err := storage.GetStats(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, StorageStats{URLCount: 3, UserCount: 5}, res)
 }
 
 func TestDatabaseStorage_init(t *testing.T) {
@@ -212,10 +244,31 @@ func TestDatabaseStorage_Clear(t *testing.T) {
 	}
 	defer db.Close()
 
+	storage := NewDatabaseStorage(db)
+
+	// ok
 	mock.ExpectBegin()
-	mock.ExpectExec("delete * from shortener").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("delete").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+	err = storage.Clear()
+	require.NoError(t, err)
+
+	// Error in begin
+	mock.ExpectBegin().WillReturnError(fmt.Errorf("some strange error"))
+	err = storage.Clear()
+	require.Error(t, err)
+}
+
+func TestDatabaseStorage_Ping(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mock.ExpectBegin()
 	mock.ExpectCommit()
 
 	storage := NewDatabaseStorage(db)
-	storage.Clear()
+	storage.Ping()
 }

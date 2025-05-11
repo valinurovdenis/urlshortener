@@ -29,7 +29,7 @@ func SanitizeURL(origURL string) (string, error) {
 	return parsed.String(), nil
 }
 
-//go:generate mockery --name ShortenerService
+// Interface for shortner service methods.
 type ShortenerService interface {
 	// Generating short url.
 	GenerateShortURLWithContext(context context.Context, longURL string, userID string) (string, error)
@@ -41,6 +41,8 @@ type ShortenerService interface {
 	GetUserURLs(context context.Context, userID string) ([]urlstorage.URLPair, error)
 	// Deletes all user urls.
 	DeleteUserURLs(ctx context.Context, userID string, shortURLs ...string) error
+	// Get service stats.
+	GetStats(ctx context.Context) (urlstorage.StorageStats, error)
 	// Check whether service is alive.
 	Ping() error
 }
@@ -163,7 +165,6 @@ func (s ShortenerServiceImpl) FlushDeletedUserURLs(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("done")
 			if len(urlsByUser) != 0 {
 				if err := s.UserURLStorage.DeleteUserURLs(context.TODO(), urlsByUser...); err != nil {
 					logger.Log.Error("cannot delete urls", zap.Error(err))
@@ -199,4 +200,9 @@ func (s ShortenerServiceImpl) Ping() error {
 // Returns all user urls.
 func (s ShortenerServiceImpl) GetUserURLs(context context.Context, userID string) ([]urlstorage.URLPair, error) {
 	return s.UserURLStorage.GetUserURLs(context, userID)
+}
+
+// Get service stats.
+func (s ShortenerServiceImpl) GetStats(ctx context.Context) (urlstorage.StorageStats, error) {
+	return s.UserURLStorage.GetStats(ctx)
 }

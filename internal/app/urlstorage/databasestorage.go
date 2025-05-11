@@ -156,6 +156,20 @@ func (s *DatabaseStorage) DeleteUserURLs(ctx context.Context, urlsByUser ...URLs
 	return tx.Commit()
 }
 
+// Get storage stats.
+func (s *DatabaseStorage) GetStats(ctx context.Context) (StorageStats, error) {
+	row := s.DB.QueryRowContext(ctx,
+		"SELECT count(distinct user_id), count(*) from shortener")
+	var urlCount int
+	var userCount int
+	err := row.Scan(&userCount, &urlCount)
+	if err != nil {
+		fmt.Println(err)
+		return StorageStats{}, fmt.Errorf("failed to get stats: %w", err)
+	}
+	return StorageStats{URLCount: urlCount, UserCount: userCount}, nil
+}
+
 // Clear all mappings.
 func (s *DatabaseStorage) Clear() error {
 	tx, err := s.DB.BeginTx(context.Background(), nil)

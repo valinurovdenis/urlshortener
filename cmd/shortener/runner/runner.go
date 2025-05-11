@@ -13,6 +13,7 @@ import (
 
 	"github.com/valinurovdenis/urlshortener/internal/app/auth"
 	"github.com/valinurovdenis/urlshortener/internal/app/handlers"
+	"github.com/valinurovdenis/urlshortener/internal/app/ipchecker"
 	"github.com/valinurovdenis/urlshortener/internal/app/logger"
 	"github.com/valinurovdenis/urlshortener/internal/app/service"
 	"github.com/valinurovdenis/urlshortener/internal/app/shortcutgenerator"
@@ -60,7 +61,8 @@ func Run(ctx context.Context, stopped chan struct{}) error {
 	generator := shortcutgenerator.NewRandBase64Generator(config.ShortLength)
 	service := service.NewShortenerService(urlStorage, userURLStorage, generator)
 	auth := auth.NewAuthenticator(config.SecretKey, userStorage)
-	handler := handlers.NewShortenerHandler(*service, *auth, config.BaseURL+"/")
+	ipchecker := ipchecker.NewIPChecker(config.TrustedSubnet)
+	handler := handlers.NewShortenerHandler(*service, *auth, config.BaseURL+"/", *ipchecker)
 
 	router := handlers.ShortenerRouter(*handler, config.IsProduction)
 	var srv *http.Server

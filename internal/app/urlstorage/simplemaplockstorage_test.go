@@ -141,6 +141,13 @@ func TestSimpleMapLockStorage_Ping(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestSimpleMapLockStorage_GetStats(t *testing.T) {
+	storage := urlstorage.NewSimpleMapLockStorage()
+	_, err := storage.GetStats(context.Background())
+	// TODO: write tests
+	require.Error(t, err)
+}
+
 func TestSimpleMapLockStorage_GetUserURLs(t *testing.T) {
 	storage := urlstorage.NewSimpleMapLockStorage()
 	_, err := storage.GetUserURLs(context.Background(), "user_1")
