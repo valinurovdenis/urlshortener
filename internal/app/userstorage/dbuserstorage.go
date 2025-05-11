@@ -3,6 +3,7 @@ package userstorage
 import (
 	"context"
 	"database/sql"
+	"fmt"
 )
 
 // Generates new user id by autoincrement in postgresql.
@@ -21,7 +22,7 @@ func NewDatabaseUserStorage(db *sql.DB) *DatabaseUserStorage {
 func (s *DatabaseUserStorage) init() error {
 	tx, err := s.DB.BeginTx(context.Background(), nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 	tx.Exec(`CREATE TABLE user_id("id" SERIAL)`)

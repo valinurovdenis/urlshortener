@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/valinurovdenis/urlshortener/internal/app/auth"
 	"github.com/valinurovdenis/urlshortener/internal/app/gzip"
+	"github.com/valinurovdenis/urlshortener/internal/app/ipchecker"
 	"github.com/valinurovdenis/urlshortener/internal/app/logger"
 	"github.com/valinurovdenis/urlshortener/internal/app/service"
 	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
@@ -19,14 +20,15 @@ import (
 
 // Main class for chi handlers.
 type ShortenerHandler struct {
-	Service service.ShortenerService
-	Auth    auth.JwtAuthenticator
-	Host    string
+	Service   service.ShortenerService
+	Auth      auth.JwtAuthenticator
+	IPChecker ipchecker.IPChecker
+	Host      string
 }
 
 // Shortener handler contains shortener service, authenticator.
-func NewShortenerHandler(service service.ShortenerService, auth auth.JwtAuthenticator, host string) *ShortenerHandler {
-	return &ShortenerHandler{Service: service, Auth: auth, Host: host}
+func NewShortenerHandler(service service.ShortenerService, auth auth.JwtAuthenticator, host string, ipchecker ipchecker.IPChecker) *ShortenerHandler {
+	return &ShortenerHandler{Service: service, Auth: auth, Host: host, IPChecker: ipchecker}
 }
 
 // Handler for redirecting to long url by short url.
@@ -199,12 +201,24 @@ func (h *ShortenerHandler) DeleteUserURLs(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// Delete urls saved by user.
+func (h ShortenerHandler) GetStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.Service.GetStats(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(stats)
+}
+
 // Defines all handlers.
 func ShortenerRouter(handler ShortenerHandler, isProduction bool) chi.Router {
 	r := chi.NewRouter()
 	if !isProduction {
 		r.Mount("/debug", middleware.Profiler())
 	}
+	r.With(handler.IPChecker.CheckFromInnerNetwork).Get("/api/internal/stats", handler.GetStats)
 
 	r.Group(func(r chi.Router) {
 		r.Use(logger.RequestLoggerMiddleware)

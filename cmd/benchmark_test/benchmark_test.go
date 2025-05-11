@@ -15,6 +15,7 @@ import (
 
 	"github.com/valinurovdenis/urlshortener/internal/app/auth"
 	"github.com/valinurovdenis/urlshortener/internal/app/handlers"
+	"github.com/valinurovdenis/urlshortener/internal/app/ipchecker"
 	"github.com/valinurovdenis/urlshortener/internal/app/service"
 	"github.com/valinurovdenis/urlshortener/internal/app/shortcutgenerator"
 	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
@@ -56,7 +57,7 @@ func main() {
 	generator := shortcutgenerator.NewRandBase64Generator(8)
 	service := service.NewShortenerService(urlStorage, userURLStorage, generator)
 	auth := auth.NewAuthenticator("secret_benchmark", userStorage)
-	handler := handlers.NewShortenerHandler(*service, *auth, "/")
+	handler := handlers.NewShortenerHandler(*service, *auth, "/", ipchecker.IPChecker{})
 	defer service.Stop()
 	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
 

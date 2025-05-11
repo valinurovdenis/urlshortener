@@ -12,7 +12,6 @@ require (
 	github.com/ichiban/cyclomatic v0.0.0-20191125092111-2b21bc9bba1c
 	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
 	github.com/jackc/pgx/v5 v5.7.1
-	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.36.0

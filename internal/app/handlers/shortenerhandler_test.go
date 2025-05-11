@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/valinurovdenis/urlshortener/internal/app/auth"
 	"github.com/valinurovdenis/urlshortener/internal/app/handlers"
+	"github.com/valinurovdenis/urlshortener/internal/app/ipchecker"
 	"github.com/valinurovdenis/urlshortener/internal/app/mocks"
 	"github.com/valinurovdenis/urlshortener/internal/app/service"
 	"github.com/valinurovdenis/urlshortener/internal/app/urlstorage"
@@ -55,7 +56,7 @@ func TestShortenerHandler_redirect(t *testing.T) {
 	mockStorage.On("GetLongURLWithContext", mock.Anything, "non-existing").Return("", errors.New("some error")).Once()
 	mockUserStorage := mocks.NewUserURLStorage(t)
 	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
-	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/")
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/", ipchecker.IPChecker{})
 	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
 	defer ts.Close()
 	testCases := []struct {
@@ -95,7 +96,7 @@ func TestShortenerHandler_generateSimple(t *testing.T) {
 	shortURLHost := "host/"
 	mockUserStorage := mocks.NewUserURLStorage(t)
 	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
-	handler := handlers.NewShortenerHandler(*shortenerService, *auth, shortURLHost)
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, shortURLHost, ipchecker.IPChecker{})
 	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
 	defer ts.Close()
 	testCases := []struct {
@@ -144,7 +145,7 @@ func TestShortenerHandler_generateJSON(t *testing.T) {
 	shortURLHost := "host/"
 	mockUserStorage := mocks.NewUserURLStorage(t)
 	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
-	handler := handlers.NewShortenerHandler(*shortenerService, *auth, shortURLHost)
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, shortURLHost, ipchecker.IPChecker{})
 	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
 	defer ts.Close()
 	testCases := []struct {
@@ -193,7 +194,7 @@ func BenchmarkShortenerHandler_generateJSON(b *testing.B) {
 	shortURLHost := "host/"
 	mockUserStorage := mocks.NewUserURLStorage(b)
 	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
-	handler := handlers.NewShortenerHandler(*shortenerService, *auth, shortURLHost)
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, shortURLHost, ipchecker.IPChecker{})
 	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
 	defer ts.Close()
 
@@ -221,7 +222,7 @@ func TestShortenerHandler_generateGzip(t *testing.T) {
 	shortURLHost := "host/"
 	mockUserStorage := mocks.NewUserURLStorage(t)
 	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
-	handler := handlers.NewShortenerHandler(*shortenerService, *auth, shortURLHost)
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, shortURLHost, ipchecker.IPChecker{})
 	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
 	defer ts.Close()
 	testCases := []struct {
@@ -264,7 +265,7 @@ func TestShortenerHandler_ServeHTTPBadRequest(t *testing.T) {
 	auth := auth.NewAuthenticator("SECRET_KEY", userStorage)
 	mockUserStorage := mocks.NewUserURLStorage(t)
 	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
-	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/")
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/", ipchecker.IPChecker{})
 	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
 	defer ts.Close()
 	testCases := []struct {
@@ -294,7 +295,7 @@ func TestShortenerHandler_CheckUnauthorized(t *testing.T) {
 	auth := auth.NewAuthenticator("SECRET_KEY", userStorage)
 	mockUserStorage := mocks.NewUserURLStorage(t)
 	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
-	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/")
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/", ipchecker.IPChecker{})
 	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
 	defer ts.Close()
 
@@ -311,7 +312,7 @@ func TestShortenerHandler_CheckNewUserCreated(t *testing.T) {
 	auth := auth.NewAuthenticator("SECRET_KEY", userStorage)
 	mockUserStorage := mocks.NewUserURLStorage(t)
 	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
-	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/")
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/", ipchecker.IPChecker{})
 	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
 	defer ts.Close()
 
@@ -335,7 +336,7 @@ func TestShortenerHandler_GetUserURLs(t *testing.T) {
 	notEmptyURLs := []urlstorage.URLPair{{Short: "short", Long: "long"}}
 	mockUserStorage.On("GetUserURLs", mock.Anything, "1").Return(emptyUrls, nil).Once()
 	mockUserStorage.On("GetUserURLs", mock.Anything, "1").Return(notEmptyURLs, nil).Once()
-	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/")
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/", ipchecker.IPChecker{})
 	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
 	defer ts.Close()
 
@@ -369,7 +370,7 @@ func TestShortenerHandler_Ping(t *testing.T) {
 	auth := auth.NewAuthenticator("SECRET_KEY", userStorage)
 	mockUserStorage := mocks.NewUserURLStorage(t)
 	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
-	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/")
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/", ipchecker.IPChecker{})
 	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
 	defer ts.Close()
 
@@ -413,7 +414,7 @@ func TestShortenerHandler_GenerateBatch(t *testing.T) {
 	mockUserStorage := mocks.NewUserURLStorage(t)
 	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
 	mockStorage.On("StoreManyWithContext", mock.Anything, mock.Anything, mock.Anything).Return([]error{nil, nil}, nil).Once()
-	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/")
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/", ipchecker.IPChecker{})
 	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
 	defer ts.Close()
 
@@ -427,4 +428,23 @@ func TestShortenerHandler_GenerateBatch(t *testing.T) {
 	var res []handlers.ResultBatch
 	json.NewDecoder(resp.Body).Decode(&res)
 	require.Equal(t, []handlers.ResultBatch{{URL: "host/short", ID: "1"}, {URL: "host/short", ID: "2"}}, res)
+}
+
+func TestShortenerHandler_CheckGetStats(t *testing.T) {
+	mockStorage := mocks.NewURLStorage(t)
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	userStorage := mocks.NewUserStorage(t)
+	auth := auth.NewAuthenticator("SECRET_KEY", userStorage)
+	mockUserStorage := mocks.NewUserURLStorage(t)
+	shortenerService := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
+	ipchecker := *ipchecker.NewIPChecker("192.168.0.0/24")
+	handler := handlers.NewShortenerHandler(*shortenerService, *auth, "host/", ipchecker)
+	mockUserStorage.On("GetStats", mock.Anything).Return(urlstorage.StorageStats{UserCount: 3, URLCount: 5}, nil).Once()
+	ts := httptest.NewServer(handlers.ShortenerRouter(*handler, false))
+	defer ts.Close()
+
+	resp, _ := testRequest(t, ts, http.MethodGet, "/api/internal/stats", nil,
+		map[string]string{"X-Real-IP": "192.168.0.1"})
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }

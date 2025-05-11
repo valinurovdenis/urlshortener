@@ -84,6 +84,11 @@ func (s *SimpleMapLockStorage) StoreManyWithContext(_ context.Context, long2Shor
 	return errs, nil
 }
 
+// Get storage stats.
+func (s *SimpleMapLockStorage) GetStats(ctx context.Context) (StorageStats, error) {
+	return StorageStats{}, errors.New("not implemented")
+}
+
 // Clear all mappings.
 func (s *SimpleMapLockStorage) Clear() error {
 	s.ShortURL2Url = make(map[string]string)
