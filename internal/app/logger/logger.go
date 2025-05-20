@@ -2,10 +2,13 @@
 package logger
 
 import (
+	"context"
 	"net/http"
 	"time"
+	"unsafe"
 
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 // Initialize zap logger.
@@ -78,4 +81,27 @@ func RequestLoggerMiddleware(h http.Handler) http.Handler {
 			zap.Duration("duration", duration),
 		)
 	})
+}
+
+// Interceptor for logging incoming requests and reponses.
+// Writes processing metrics such as method, path, status, size, duration of request.
+func RequestLoggerInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler) (interface{}, error) {
+
+		start := time.Now()
+		resp, err := handler(ctx, req)
+		duration := time.Since(start)
+		respErr := ""
+		if err != nil {
+			respErr = err.Error()
+		}
+		Log.Info("got incoming GRPC request",
+			zap.String("path", info.FullMethod),
+			zap.String("error", respErr),
+			zap.Int("size", int(unsafe.Sizeof(resp))),
+			zap.Duration("duration", duration),
+		)
+		return resp, err
+	}
 }

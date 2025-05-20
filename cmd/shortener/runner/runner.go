@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"net"
 	"net/http"
 	"os"
 
@@ -85,18 +86,29 @@ func Run(ctx context.Context, stopped chan struct{}) error {
 		}
 	}
 
+	grpcHandler := handlers.NewShortenerHandlerGrpc(*service, *auth, config.BaseURL+"/", *ipchecker)
+	grpcSrv := handlers.ShortenerGrpcRouter(*grpcHandler)
 	go func() {
 		<-ctx.Done()
 		if err := srv.Shutdown(context.Background()); err != nil {
 			log.Printf("Error when shutdown server: %v", err)
 		}
+		grpcSrv.GracefulStop()
 		service.Stop()
 		<-service.Stopped
 		close(stopped)
 	}()
 
 	if config.EnableHTTPS {
-		return srv.ListenAndServeTLS("", "")
+		go func() {
+			srv.ListenAndServeTLS("", "")
+		}()
+	}
+	if config.EnableGRPC {
+		go func() {
+			listen, _ := net.Listen("tcp", config.LocalGrpcURL)
+			grpcSrv.Serve(listen)
+		}()
 	}
 	return srv.ListenAndServe()
 }
