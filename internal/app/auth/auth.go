@@ -2,6 +2,7 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -9,6 +10,10 @@ import (
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/valinurovdenis/urlshortener/internal/app/userstorage"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 // Struct for parsing user id from jwt token.
@@ -97,6 +102,31 @@ func (a *JwtAuthenticator) CreateUserIfNeeded(h http.Handler) http.Handler {
 	})
 }
 
+// Middleware creates new user if no authorization cookie with valid user provided.
+// Returns new authorization header if new user has been created.
+func (a *JwtAuthenticator) CreateUserIfNeededGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler) (interface{}, error) {
+
+	var userID int64
+	md, ok := metadata.FromIncomingContext(ctx)
+	authorization := md.Get("Authorization")
+	userAuthenticated := false
+	if ok && len(authorization) > 0 {
+		var err error
+		if userID, err = a.GetUserID(authorization[0]); err == nil {
+			userAuthenticated = true
+		}
+	}
+	if !userAuthenticated {
+		userID, _ = a.UserStorage.GenerateUUID(ctx)
+		token, _ := a.BuildJWTString(userID)
+		grpc.SetHeader(ctx, metadata.Pairs("Authorization", token))
+	}
+	md = metadata.New(map[string]string{"userid": strconv.FormatInt(userID, 10)})
+	ctx = metadata.NewIncomingContext(ctx, md)
+	return handler(ctx, req)
+}
+
 // Middleware checks whether there is authorization cookie with valid user.
 // Returns 401 if valid user not found.
 func (a *JwtAuthenticator) OnlyWithAuth(h http.Handler) http.Handler {
@@ -116,4 +146,26 @@ func (a *JwtAuthenticator) OnlyWithAuth(h http.Handler) http.Handler {
 
 		h.ServeHTTP(w, r)
 	})
+}
+
+// Middleware checks whether there is authorization cookie with valid user.
+// Returns 401 if valid user not found.
+func (a *JwtAuthenticator) OnlyWithAuthGrpc(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler) (interface{}, error) {
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	authorization := md.Get("Authorization")
+	userAuthenticated := false
+	if ok && len(authorization) > 0 {
+		userID, err := a.GetUserID(authorization[0])
+		if err == nil {
+			md = metadata.New(map[string]string{"userid": strconv.FormatInt(userID, 10)})
+			ctx = metadata.NewIncomingContext(ctx, md)
+			userAuthenticated = true
+		}
+	}
+	if !userAuthenticated {
+		return nil, status.Errorf(codes.Unauthenticated, "Unauthorized")
+	}
+	return handler(ctx, req)
 }

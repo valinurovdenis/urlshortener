@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -178,8 +179,19 @@ func TestShortenerServiceImpl_FlushDeletedUserURLs(t *testing.T) {
 
 	err := service.DeleteUserURLs(context.Background(), "user_1", "short")
 	require.NoError(t, err)
+	time.Sleep(10 * time.Millisecond)
+	service.Stop()
+	time.Sleep(10 * time.Millisecond)
+}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	service.FlushDeletedUserURLs(ctx)
+func TestShortenerServiceImpl_GetStats(t *testing.T) {
+	mockGenerator := mocks.NewShortCutGenerator(t)
+	mockStorage := mocks.NewURLStorage(t)
+	mockUserStorage := mocks.NewUserURLStorage(t)
+	mockUserStorage.On("GetStats", mock.Anything).Return(urlstorage.StorageStats{UserCount: 3, URLCount: 5}, nil).Once()
+	service := service.NewShortenerService(mockStorage, mockUserStorage, mockGenerator)
+
+	stats, err := service.GetStats(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 3, stats.UserCount)
 }

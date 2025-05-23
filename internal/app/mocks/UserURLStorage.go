@@ -14,24 +14,6 @@ type UserURLStorage struct {
 	mock.Mock
 }
 
-// Clear provides a mock function with given fields:
-func (_m *UserURLStorage) Clear() error {
-	ret := _m.Called()
-
-	if len(ret) == 0 {
-		panic("no return value specified for Clear")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func() error); ok {
-		r0 = rf()
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
 // DeleteUserURLs provides a mock function with given fields: _a0, urls
 func (_m *UserURLStorage) DeleteUserURLs(_a0 context.Context, urls ...urlstorage.URLsForDelete) error {
 	_va := make([]interface{}, len(urls))
@@ -55,6 +37,34 @@ func (_m *UserURLStorage) DeleteUserURLs(_a0 context.Context, urls ...urlstorage
 	}
 
 	return r0
+}
+
+// GetStats provides a mock function with given fields: _a0
+func (_m *UserURLStorage) GetStats(_a0 context.Context) (urlstorage.StorageStats, error) {
+	ret := _m.Called(_a0)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetStats")
+	}
+
+	var r0 urlstorage.StorageStats
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context) (urlstorage.StorageStats, error)); ok {
+		return rf(_a0)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context) urlstorage.StorageStats); ok {
+		r0 = rf(_a0)
+	} else {
+		r0 = ret.Get(0).(urlstorage.StorageStats)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = rf(_a0)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // GetUserURLs provides a mock function with given fields: _a0, userID

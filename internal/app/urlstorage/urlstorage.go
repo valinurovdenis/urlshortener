@@ -27,6 +27,12 @@ type URLsForDelete struct {
 	ShortURLs []string
 }
 
+// Service stats.
+type StorageStats struct {
+	UserCount int `json:"users"`
+	URLCount  int `json:"urls"`
+}
+
 // Storage that contains mapping longURL <-> shortURL.
 //
 //go:generate mockery --name URLStorage
@@ -60,8 +66,8 @@ type UserURLStorage interface {
 	// Deletes given urls previously saved by user.
 	DeleteUserURLs(context context.Context, urls ...URLsForDelete) error
 
-	// Clear all user urls.
-	Clear() error
+	// Get storage stats.
+	GetStats(context context.Context) (StorageStats, error)
 
 	// Check whether storage alive.
 	Ping() error
